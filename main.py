@@ -8,22 +8,32 @@ clock = pyg.time.Clock()
 # pygame screen
 gui.init_display((300, 300), "Kanji Writing Practice")
 
-# start initializing stuff
+# GUI events
+def drawInit(self):
+    pyg.draw.circle(gui.screen, "white", mouse_pos, 5)
 
-test = gui.GUI(150, 150, 100, 100)
-gui.GUI.activate(test)
+def drawDrag(self):
+    pass
+
+# GUI initializing
+drawGUI = gui.GUI(150, 150, 175, 175, image = "assets/grid.png", pressed = drawInit)
+drawGUI.strokes = []
+undoGUI = gui.GUI(85, 275, 40, 30)
+redoGUI = gui.GUI(215, 275, 40, 30)
+submitGUI = gui.GUI(150, 275, 30, 30)
+gui.GUI.activate(drawGUI, undoGUI, redoGUI, submitGUI)
 
 running = True
 
 while running:
+    mouse_pos = pyg.mouse.get_pos()
+
     for event in pyg.event.get():
         if event.type == pyg.QUIT:
             running = False
         if event.type == pyg.WINDOWRESIZED:
-            # prevent the screen from getting smaller than the designated amount
-            gui.screen = pyg.display.set_mode((max(gui.ogSize[0], event.x), max(gui.ogSize[1], event.y)), flags = pyg.RESIZABLE)
-            for i in gui.GUI.allGUI:
-                i.update()
+            gui.scaleDisplay(event)
+        gui.GUI.interaction(event, mouse_pos)
 
     gui.GUI.activeGUI.draw(gui.screen)
 
