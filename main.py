@@ -14,6 +14,7 @@ class Stroke(pyg.sprite.Sprite):
     An instance is created on the designated sprite\n
     """
     strokeGroup = pyg.sprite.Group()
+    initPos = (0, 0)
 
     def __init__(self, sprite):
         super().__init__()
@@ -24,13 +25,24 @@ class Stroke(pyg.sprite.Sprite):
 # -------------------- GUI Events --------------------
 # drawGUI events
 def drawInit(self:gui):
+    global translationX, translationY, radius
     self.strokes.append(Stroke(drawGUI))
-
-def drawDrag(self:gui):
     translationX = (gui.screen.get_width()-self.rect.w)/2
     translationY = (gui.screen.get_height()-self.rect.h)/2
+    radius = gui.screen.get_width()*2/gui.ogSize[0]
 
-    pyg.draw.circle(self.strokes[-1].image, "white", (mouse_pos[0] - translationX, mouse_pos[1] - translationY), gui.screen.get_width()*5/gui.ogSize[0])
+    finalX = mouse_pos[0] - translationX
+    finalY = mouse_pos[1] - translationY
+    Stroke.initPos = (finalX, finalY)
+    pyg.draw.circle(self.strokes[-1].image, "white", (finalX, finalY), radius)
+
+def drawDrag(self:gui):
+    finalX = mouse_pos[0] - translationX
+    finalY = mouse_pos[1] - translationY
+
+    pyg.draw.circle(self.strokes[-1].image, "white", (finalX, finalY), radius)
+    pyg.draw.line(self.strokes[-1].image, "white", Stroke.initPos, (finalX, finalY), int(radius)*2)
+    Stroke.initPos = (finalX, finalY)
 
 #undoGUI events
 def undoStroke(self:gui):
@@ -64,4 +76,4 @@ while running:
     Stroke.strokeGroup.draw(gui.screen)
 
     pyg.display.flip()
-    clock.tick(120)
+    clock.tick(60)

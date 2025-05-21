@@ -58,7 +58,7 @@ class GUI(pyg.sprite.Sprite):
     released - function that runs when the GUI is no longer clicked on\n
     heave - function that runs when the GUI is being dragged\n
 
-    pressed, released, and heave MUST HAVE A self PARAMETER LIKE A REGULAR CLASS METHOD\n
+    pressed, released, and heave SHOULD HAVE A self PARAMETER LIKE A REGULAR CLASS METHOD\n
     """
     activeGUI = pyg.sprite.Group()
     allGUI = []
@@ -72,6 +72,7 @@ class GUI(pyg.sprite.Sprite):
         self.rect = self.image.get_rect(center = self.pos)
 
         self.dragging = False
+        self.hovering = False
         self.pressed: guiEvent = pressed
         self.freed: guiEvent = freed
         self.heave: guiEvent = heave
@@ -84,12 +85,20 @@ class GUI(pyg.sprite.Sprite):
         """
         for obj in cls.activeGUI:
             if obj.rect.collidepoint(mouse_pos):
+                obj.hovering = True
                 if event.type == pyg.MOUSEBUTTONDOWN:
                     obj.clicked()
-                if event.type == pyg.MOUSEMOTION and obj.dragging:
+                if event.type == pyg.MOUSEMOTION and obj.dragging: #and pyg.mouse.get_pressed()[0]:
                     obj.dragged()
                 if event.type == pyg.MOUSEBUTTONUP:
                     obj.released()
+            else:
+                # NOTE: this does mean that if your mouse is fast enough, you can break the dragging state prematurely
+                # ie: if you're dragging and moving an object around, it can suddenly break if you're going fast enough
+                # for now this isn't a concern for me, but it might be in the future
+                if obj.dragging:
+                    obj.released()
+                obj.hovering == False
 
     @classmethod
     def activate(cls, *args):
