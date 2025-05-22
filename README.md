@@ -7,3 +7,5 @@ originally i wanted the program to be directly embedded straight into anki itsel
 data for kanji retrieved from KanjiVG
 
 https://kanjivg.tagaini.net
+
+special thanks to userrnameee0 for helping debug and showing me the basics of svg files
