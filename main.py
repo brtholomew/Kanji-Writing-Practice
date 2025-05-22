@@ -6,7 +6,7 @@ pyg.init()
 clock = pyg.time.Clock()
 
 # pygame screen
-gui.init_display((300, 300), "Kanji Writing Practice")
+gui.initDisplay((300, 300), "Kanji Writing Practice")
 
 class Stroke(pyg.sprite.Sprite):
     """

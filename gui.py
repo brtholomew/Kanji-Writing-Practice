@@ -4,7 +4,7 @@ from typing import Callable, TypeAlias
 
 pyg.init()
 
-def init_display(size = (100, 100), caption:str = "Pygame"):
+def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     """
     Initializes a display at the desired lowest possible size\n
     Necessary for allowing the GUI to scale properly
@@ -63,7 +63,7 @@ class GUI(pyg.sprite.Sprite):
     activeGUI = pyg.sprite.Group()
     allGUI = []
 
-    def __init__(self, pos: point, dimensions: point, image: str = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!")):
+    def __init__(self, pos: point, dimensions: point, image = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!")):
         super().__init__()
         self.pos: point = pos
         self.dimensions: point = dimensions
