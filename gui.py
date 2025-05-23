@@ -9,18 +9,19 @@ def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     Initializes a display at the desired lowest possible size\n
     Necessary for allowing the GUI to scale properly
     """
-    global ogSize, currentSize, screen
-    ogSize = size
-    currentSize = size
+    global ogSize, currentSize, screen, scaleX, scaleY, scale
+    ogSize, currentSize = size, size
+    scaleX, scaleY, scale = 1, 1, 1
+    # take the min of the x/y scales so the image itself retains its original aspect ratio
     screen = pyg.display.set_mode(size = ogSize, flags = pyg.RESIZABLE)
     pyg.display.set_caption(caption)
 
 def scaleDisplay(event, *args):
     """
     Correctly scales everything when the pygame display is resized\n
-    args is any sprite
+    Accepts any sprite object, or object with a scale method
     """
-    global currentSize
+    global currentSize, scaleX, scaleY, scale
     # prevent the screen from getting smaller than the designated amount
     screen = pyg.display.set_mode((max(ogSize[0], event.x), max(ogSize[1], event.y)), flags = pyg.RESIZABLE)
 
@@ -36,8 +37,8 @@ def scaleDisplay(event, *args):
     prev = min(prevX, prevY)
 
     for sprite in args:
-        if not hasattr(sprite, "ogimage"):
-            # sprite is missing original attributes, either make do or calculate what they would be
+        if not isinstance(sprite, GUI):
+            # sprite is probably missing all the necessary attributes
             sprite.ogimage = sprite.image
             sprite.pos = (sprite.rect.centerx/prevX, sprite.rect.centery/prevY)
             sprite.dimensions = (sprite.rect.w/prev, sprite.rect.h/prev)
@@ -47,7 +48,6 @@ def scaleDisplay(event, *args):
     currentSize = displaySize
 
 point: TypeAlias = tuple[int, int]
-
 guiEvent: TypeAlias = Callable[["GUI"], None]
 
 class GUI(pyg.sprite.Sprite):
@@ -57,13 +57,16 @@ class GUI(pyg.sprite.Sprite):
     pressed - function that runs when the GUI is clicked on\n
     released - function that runs when the GUI is no longer clicked on\n
     heave - function that runs when the GUI is being dragged\n
+    active - function that runs if the GUI is being updated (useful for hovering)\n
 
-    pressed, released, and heave SHOULD HAVE A self PARAMETER LIKE A REGULAR CLASS METHOD\n
+    pressed, released, heave, and active SHOULD HAVE A self PARAMETER LIKE A REGULAR CLASS METHOD\n
+
+    if you're using active, make sure to use activeGUI.update()\n
     """
     activeGUI = pyg.sprite.Group()
     allGUI = []
 
-    def __init__(self, pos: point, dimensions: point, image = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!")):
+    def __init__(self, pos: point, dimensions: point, image = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!"), active: guiEvent = lambda x: None):
         super().__init__()
         self.pos: point = pos
         self.dimensions: point = dimensions
@@ -76,6 +79,7 @@ class GUI(pyg.sprite.Sprite):
         self.pressed: guiEvent = pressed
         self.freed: guiEvent = freed
         self.heave: guiEvent = heave
+        self.active: guiEvent = active
         GUI.allGUI.append(self)
 
     @classmethod
@@ -84,21 +88,15 @@ class GUI(pyg.sprite.Sprite):
         Goes into the event loop, handles all possible mouse interactions with GUI\n
         """
         for obj in cls.activeGUI:
-            if obj.rect.collidepoint(mouse_pos):
-                obj.hovering = True
+            if obj.hovering:
                 if event.type == pyg.MOUSEBUTTONDOWN:
                     obj.clicked()
                 if event.type == pyg.MOUSEMOTION and obj.dragging: #and pyg.mouse.get_pressed()[0]:
                     obj.dragged()
-                if event.type == pyg.MOUSEBUTTONUP:
+                if event.type == pyg.MOUSEBUTTONUP and obj.dragging:
                     obj.released()
-            else:
-                # NOTE: this does mean that if your mouse is fast enough, you can break the dragging state prematurely
-                # ie: if you're dragging and moving an object around, it can suddenly break if you're going fast enough
-                # for now this isn't a concern for me, but it might be in the future
-                if obj.dragging:
-                    obj.released()
-                obj.hovering == False
+            elif event.type == pyg.MOUSEBUTTONUP:
+                    obj.dragging = False
 
     @classmethod
     def activate(cls, *args):
@@ -120,5 +118,6 @@ class GUI(pyg.sprite.Sprite):
     def dragged(self):
         self.heave(self)
 
-    def update(self):
-        pass
+    def update(self, mouse_pos: point):
+        self.hovering = False if not self.rect.collidepoint(mouse_pos) else True
+        self.active(self)
