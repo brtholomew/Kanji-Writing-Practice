@@ -16,64 +16,76 @@ class Stroke(pyg.sprite.Sprite):
     frame = pyg.image.load("assets/frame.png").convert_alpha()
     strokeGroup = pyg.sprite.Group()
 
-    width = 4
-    
-    initPos = (0, 0)
+    width = 8
 
     def __init__(self, sprite):
         super().__init__()
         self.image = pyg.transform.scale(Stroke.frame, sprite.rect.size)
         self.rect = self.image.get_rect(center = sprite.rect.center)
+
+        self.parent = sprite
+        self.pos: gui.point = sprite.pos
+        self.dimensions = sprite.dimensions
         self.points = []
 
         Stroke.strokeGroup.add(self)
 
-    def draw(self, finalPos: gui.point, width):
+    def draw(self, finalPos: gui.point):
         """
         Draws a line on the frame\n
-        If you're using the mouse with this function, make sure to localize the coordinates to the frame
+        If you're using the mouse with this method, make sure to localize the coordinates to the frame first
         """
-        pyg.draw.circle(self.image, "white", finalPos, width/2)
-        pyg.draw.line(self.image, "white", Stroke.initPos, finalPos, int(width))
-        Stroke.initPos = finalPos
+        self.points.append([finalPos[0]/gui.scale, finalPos[1]/gui.scale])
+        pyg.draw.circle(self.image, "white", finalPos, Stroke.width/2)
+        pyg.draw.line(self.image, "white", self.initPos, finalPos, int(Stroke.width))
+        self.initPos = finalPos
 
+    def scale(self):
+        """
+        Redraws the frame with the correct scaling
+        """
+        Stroke.width = 8*gui.scale
+        # reset the frame
+        self.image = pyg.transform.scale(Stroke.frame, self.rect.size)
 
-    def scale(self, scaleX, scaleY):
-        pass
+        # redraw every point onto it
+        temp = self.points
+        self.points = []
+        self.initPos = (temp[0][0]*gui.scale, temp[0][1]*gui.scale)
+
+        for i in temp:
+            self.draw((i[0]*gui.scale, i[1]*gui.scale))
 
 
 # -------------------- GUI Events --------------------
 # drawGUI events
 def drawInit(self:gui):
     # create a new frame
-    global translationX, translationY, width
+    global translationX, translationY
     self.strokes.append(Stroke(drawGUI))
 
-    # localize the coordinates to the frame
-    translationX = (gui.screen.get_width()-self.rect.w)/2
-    translationY = (gui.screen.get_height()-self.rect.h)/2
-    width = 4*gui.scale
-
+    # localize coordinates
+    translationX, translationY = self.rect.topleft
     finalPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
-    Stroke.initPos = finalPos
-    self.strokes[-1].points.append(list(finalPos))
-    self.strokes[-1].draw(finalPos, width)
 
+    #Stroke.initPos = finalPos
+    self.strokes[-1].initPos = finalPos
+    self.strokes[-1].draw(finalPos)
 
 def drawDrag(self:gui):
     # draw circles on that frame
     finalPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
 
-    self.strokes[-1].points.append(list(finalPos))
-    self.strokes[-1].draw(finalPos, width)
+    self.strokes[-1].draw(finalPos)
 
 def drawPointsCheck(self:gui):
-    print(self.strokes[-1].points)
+    print(len(Stroke.strokeGroup))
+    #print(self.strokes[-1].points)
 
 def drawCheck(self:gui):
     # my terrible solution to a mild problem
     if not self.hovering and self.dragging:
-        Stroke.initPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
+        self.strokes[-1].initPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
 
 #undoGUI events
 def undoStroke(self:gui):
@@ -97,6 +109,7 @@ running = True
 
 while running:
     mouse_pos = pyg.mouse.get_pos()
+    #print(f"mouse x:{mouse_pos[0]}, translateX: {drawGUI.rect.topleft[0]}")
     for event in pyg.event.get():
         if event.type == pyg.QUIT:
             running = False

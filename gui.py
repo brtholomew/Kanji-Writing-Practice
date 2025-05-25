@@ -12,17 +12,18 @@ def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     global ogSize, currentSize, screen, scaleX, scaleY, scale
     ogSize, currentSize = size, size
     scaleX, scaleY, scale = 1, 1, 1
-    # take the min of the x/y scales so the image itself retains its original aspect ratio
+
     screen = pyg.display.set_mode(size = ogSize, flags = pyg.RESIZABLE)
     pyg.display.set_caption(caption)
 
 def scaleDisplay(event, *args):
     """
     Correctly scales everything when the pygame display is resized\n
-    Accepts any sprite object, or object with a scale method
+    Accepts any sprite object, or object with a "scale" method
     """
     global currentSize, scaleX, scaleY, scale
     # prevent the screen from getting smaller than the designated amount
+
     screen = pyg.display.set_mode((max(ogSize[0], event.x), max(ogSize[1], event.y)), flags = pyg.RESIZABLE)
 
     displaySize = pyg.display.get_window_size()
@@ -37,13 +38,17 @@ def scaleDisplay(event, *args):
     prev = min(prevX, prevY)
 
     for sprite in args:
-        if not isinstance(sprite, GUI):
-            # sprite is probably missing all the necessary attributes
-            sprite.ogimage = sprite.image
-            sprite.pos = (sprite.rect.centerx/prevX, sprite.rect.centery/prevY)
-            sprite.dimensions = (sprite.rect.w/prev, sprite.rect.h/prev)
-        sprite.image = pyg.transform.scale(sprite.ogimage, (sprite.dimensions[0]*scale, sprite.dimensions[1]*scale))
-        sprite.rect = sprite.image.get_rect(center = (sprite.pos[0]*scaleX, sprite.pos[1]*scaleY))
+        if isinstance(sprite, pyg.sprite.Sprite):
+            if not isinstance(sprite, GUI):
+                # sprite is probably missing all the necessary attributes
+                sprite.ogimage = sprite.image
+                sprite.pos = (sprite.rect.centerx/prevX, sprite.rect.centery/prevY)
+                sprite.dimensions = (sprite.rect.w/prev, sprite.rect.h/prev)
+            sprite.image = pyg.transform.scale(sprite.ogimage, (sprite.dimensions[0]*scale, sprite.dimensions[1]*scale))
+            sprite.rect = sprite.image.get_rect(center = (sprite.pos[0]*scaleX, sprite.pos[1]*scaleY))
+        if hasattr(sprite, "scale") and callable(sprite.scale):
+            # call supplementary scale method if it exists (isn't it funny how i initially named the item variable "sprite"?)
+            sprite.scale()
 
     currentSize = displaySize
 
