@@ -5,9 +5,14 @@ import gui
 
 pyg.init()
 
-gui.initDisplay((300, 300))
+gui.initDisplay((300, 300))  
 
 # -------------------- SVG Functions --------------------
+def listToFloat(list: list):
+    return float("".join(list))
+
+def distanceFormula(p1: gui.point, p2: gui.point):
+    return ((p2[0]-p1[0])**2+(p2[1]-p1[1])**2)**0.5
 
 def replaceSubstring(stri: str, newValue: str | float, index: tuple):
     """
@@ -43,7 +48,6 @@ def extractPathParameter(svg: str):
     # start index begins at the first character after the quotation mark, end index is at the quotation mark that closes the d parameter
     startIndex = svg.index('"', startIndex) + 1
     endIndex = svg.index('"', startIndex)
-    listSVG = list(svg)
     d = []
     # counter tracks if we're on an x or y coordinate; 0 = x, 1 = y
     counter = 0
@@ -51,7 +55,6 @@ def extractPathParameter(svg: str):
         # link current command to a list of list of x and y coordinates
         # every x/y coordinate will be represented as a list
         if svg[i].isalpha():
-            #d[svg[i]] = []
             currentCommand = svg[i]
             d.append({currentCommand: []})
             # create new x/y coordinate list
@@ -74,7 +77,6 @@ def extractPathParameter(svg: str):
                 counter = 0
                 d[-1][currentCommand].append([["-"]] if svg[i] == "-" else [])
     return d
-
 
 def extractPosition(svg: str, keyword: str, start: int = 0):
     """
@@ -115,16 +117,7 @@ def alterValue(svg: str, **kwargs):
     Will also properly apply width and height dilations
     """
     for keyword, value in kwargs.items():
-        # svg = list(svg)
         startIndex, endIndex = extractPosition("".join(svg), keyword)
-        # oldValue = []
-        # for i in range(startIndex, endIndex):
-        #     #del svg[startIndex]
-        #     oldValue.append(svg.pop(startIndex))
-        # svg.insert(startIndex, str(value))
-        # # inserting the value whole without spliting it into individual elements will misallign the index found using extractPosition
-        # # instead of using an external library or coding my own solution to this problem, i will write code that looks redundant
-        # svg = "".join(svg)
         svg, oldValue = replaceSubstring(svg, value, (startIndex, endIndex))
 
         if keyword == "width" or keyword == "height":
@@ -132,29 +125,98 @@ def alterValue(svg: str, **kwargs):
             # ... extract what's inside of the d parameter
             d = extractPathParameter(svg)
             # reconstruct d parameter while applying the transformations
-            #print(d)
-            #print(svg)
             temp = ""
             # for every move command
             for i in d:
                 for k, v in i.items():
                     temp = f"{temp}{k}"
                     # for every x/y coordinate
-                    for q in v:
-                        x = float("".join(q[0]))
-                        y = float("".join(q[1]))
+                    for c in v:
+                        x = float("".join(c[0]))
+                        y = float("".join(c[1]))
                         temp = f"{temp}{x*(value/float(oldValue) if keyword == 'width' else 1)},{y*(value/float(oldValue) if keyword == 'height' else 1)},"
                     # pop the last comma off
                     temp = list(temp)
                     del temp[-1]
                     temp = "".join(temp)
+            # ONCE AGAIN CURSE YOU SVG FILES
             temp = temp.replace(",-", "-")
+
             startIndex = svg.index('"', svg.index(' d="')) + 1
             endIndex = svg.index('"', startIndex)
             svg = replaceSubstring(svg, temp, (startIndex, endIndex))[0]
             #print(f"extracted d parameter: {temp}")
             
     return svg
+
+# -------------------- Bezier Class --------------------
+class Bezier():
+    """
+    Converts a svg into an object that contains a list of bezier curves
+    """
+    def __init__(self, svg: str):
+        self.controlPoints = []
+        finalPos = (0, 0)
+        # extract the control points for every bezier curve 
+        for i in extractPathParameter(svg):
+            for k, v in i.items():
+                if k.upper() == "M":
+                    for c in v:
+                        x = listToFloat(c[0])
+                        y = listToFloat(c[1])
+                        # final point becomes the initial point of the next curve
+                        finalPos = (x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y)
+                elif k.upper() == "C":
+                    self.controlPoints.append([])
+                    self.controlPoints[-1].append(finalPos)
+                    for c in v:
+                        x = listToFloat(c[0])
+                        y = listToFloat(c[1])
+                        self.controlPoints[-1].append((x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y))
+                    # final point becomes the initial point of the next curve
+                    finalPos = self.controlPoints[-1][-1]
+                else:
+                    raise ValueError(f"Bezier class not built for processing this command: {k}")
+        
+        # build the equations for every bezier curve
+        self.functions = []
+        for i in self.controlPoints:
+            # explicit form of equation for cubic bezier curve
+            self.functions.append(lambda t, i=i: ((1-t)**3*i[0][0] + 3*(1-t)**2*t*i[1][0] + 3*(1-t)*t**2*i[2][0] + t**3*i[3][0], (1-t)**3*i[0][1] + 3*(1-t)**2*t*i[1][1] + 3*(1-t)*t**2*i[2][1] + t**3*i[3][1]))
+
+        # get the dist info across all bezier curves
+        # code taken from roblox blog given to me by issai (btw if they take down the blog, is it illegal for me to use it still?)
+        # thank you issai https://web.archive.org/web/20201115172941/https://developer.roblox.com/en-us/articles/Bezier-curves
+        self.distInfo = {}
+        total = 0
+        for f in self.functions:
+            for n in range(0, 100, 1):
+                p1, p2 = f(n/100), f((n+1)/100)
+                dist = distanceFormula(p1, p2)
+                self.distInfo[total] = [dist, p1, p2]
+                total += dist
+            self.total = total
+
+    def bezierPercent(self, t: float):
+        """
+        Returns the approximate point of the combined beziers based on the percent linear distance it has traveled in total\n
+        (no i don't understand what i just wrote down either)
+        """
+        # thank you issai https://web.archive.org/web/20201115172941/https://developer.roblox.com/en-us/articles/Bezier-curves
+        dist = t*self.total
+        if dist == 0 or dist == self.total:
+            # no interpolation needed
+            return list(self.distInfo.values())[0][1] if dist == 0 else list(self.distInfo.values())[-1][2]
+        for k, v in self.distInfo.items():
+            # if we go past the percent linear distance
+            if dist - k < 0:
+                break
+            length = k
+        info = self.distInfo[length]
+        # calculate the percent off we are
+        percent = (dist - length)/info[0]
+        # linearly interpolate the point
+        return (info[1][0]+(info[2][0]-info[1][0])*percent, info[1][1]+(info[2][1]-info[1][1])*percent)
 
 # -------------------- Kanji Class --------------------
 
@@ -223,33 +285,19 @@ class Kanji():
             newSvgList.append(alterValue(i, width = self.metadata["width"]*scale, height = self.metadata["height"]*scale, **{"stroke-width": self.metadata["strokeWidth"]*scale}))
         self.surfList = Kanji.svgTextToSurf(*newSvgList)
 
-        # global blitSequence
-        # blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
-
-
-
-# temp = []
-# for i in Kanji.deconstructKanji("飲")[0]:
-#     temp.append(gui.GUI((150, 150), (109, 109), image = Kanji.svgTextToSurf(i)))
-#gui.GUI.activate(temp)
-# Kanji.alterValue("""<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
-# <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-# 	<path id="kvg:098df-s1" kvg:type="㇒" d="M52.75,10.5c0.11,0.98-0.19,2.67-0.97,3.93C45,25.34,31.75,41.19,14,51.5"/>
-# </g>
-# </svg>""", "width", 300)
-
-kanji = Kanji("食", (175, 175), 8)
+# test rendering
+kanji = Kanji("食", (109, 109), 8)
 blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
-# print("""<svg xmlns="http://www.w3.org/2000/svg" width="300" height="109" viewBox="0 0 109 109">
-# <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-#         <path id="kvg:098df-s4" kvg:type="㇕" d="M38,40c0.83,0.47,2.19,1,3.86,0.83c9.39-0.96,21.95-2.76,23.25-2.84c1.67-0.1,3.14,0.88,3.11,2.53C68.2,41.8,67,53.25,66.34,62.4c-0.07,0.94-0.13,1.36-0.13,1.99"/>
-# </g>
-# </svg>""".index("c-0.07"))
-# print(extractPathParameter("""<svg xmlns="http://www.w3.org/2000/svg" width="300" height="109" viewBox="0 0 109 109">
-# <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-#         <path id="kvg:098df-s4" kvg:type="㇕" d="M38,40c0.83,0.47,2.19,1,3.86,0.83c9.39-0.96,21.95-2.76,23.25-2.84c1.67-0.1,3.14,0.88,3.11,2.53C68.2,41.8,67,53.25,66.34,62.4c-0.07,0.94-0.13,1.36-0.13,1.99"/>
-# </g>
-# </svg>"""))
+
+testSVG = """<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
+<g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+	<path id="kvg:098df-s1" kvg:type="㇒" d="M52.75,10.5c0.11,0.98-0.19,2.67-0.97,3.93C45,25.34,31.75,41.19,14,51.5"/>
+</g>
+</svg>"""
+
+test = Bezier(alterValue(testSVG, width = 300, height = 300, **{"stroke-width" : 1}, viewBox = f"0 0 {300} {300}"))
+
+# pygame
 
 scale = 1
 running = True
@@ -265,19 +313,9 @@ while running:
             elif event.key == pyg.K_d:
                 scale += 0.1
 
-    kanji.scale(scale)
+    #kanji.scale(scale)
     gui.screen.fill("white")
     pyg.Surface.blits(gui.screen, blitSequence)
-#     pyg.Surface.blit(gui.screen, Kanji.svgTextToSurf("""<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
-# <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-# 	<path id="kvg:098df-s1" kvg:type="㇒" d="M52.75,10.5c0.11,0.98-0.19,2.67-0.97,3.93C45,25.34,31.75,41.19,14,51.5"/>
-# </g>
-# </svg>"""), (87.5, 87.5))
-#     pyg.Surface.blit(gui.screen, Kanji.svgTextToSurf("""<svg xmlns="http://www.w3.org/2000/svg" width="329" height="329" viewBox="0 0 327 327">
-# <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;">
-# 	<path id="kvg:098df-s1" kvg:type="㇒" d="M158.25,31.5c0.33,2.94-0.57,8.01-2.91,11.79C135,76.02,95.25,123.57,42,154.5"/>
-# </g>
-# </svg>"""), (87.5, 87.5))
     gui.GUI.activeGUI.draw(gui.screen)
 
     pyg.display.flip()

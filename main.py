@@ -33,7 +33,6 @@ class Stroke(pyg.sprite.Sprite):
     def draw(self, finalPos: gui.point):
         """
         Draws a line on the frame\n
-        If you're using the mouse with this method, make sure to localize the coordinates to the frame first
         """
         self.points.append([finalPos[0]/gui.scale, finalPos[1]/gui.scale])
         pyg.draw.circle(self.image, "white", finalPos, Stroke.width/2)
