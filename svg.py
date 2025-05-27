@@ -132,9 +132,9 @@ def alterValue(svg: str, **kwargs):
                     temp = f"{temp}{k}"
                     # for every x/y coordinate
                     for c in v:
-                        x = float("".join(c[0]))
-                        y = float("".join(c[1]))
-                        temp = f"{temp}{x*(value/float(oldValue) if keyword == 'width' else 1)},{y*(value/float(oldValue) if keyword == 'height' else 1)},"
+                        x = float("".join(c[0]))*(value/float(oldValue) if keyword == 'width' else 1)
+                        y = float("".join(c[1]))*(value/float(oldValue) if keyword == 'height' else 1)
+                        temp = f"{temp}{round(x, 2)},{round(y, 2)},"
                     # pop the last comma off
                     temp = list(temp)
                     del temp[-1]
@@ -200,7 +200,6 @@ class Bezier():
     def bezierPercent(self, t: float):
         """
         Returns the approximate point of the combined beziers based on the percent linear distance it has traveled in total\n
-        (no i don't understand what i just wrote down either)
         """
         # thank you issai https://web.archive.org/web/20201115172941/https://developer.roblox.com/en-us/articles/Bezier-curves
         dist = t*self.total
@@ -216,7 +215,7 @@ class Bezier():
         # calculate the percent off we are
         percent = (dist - length)/info[0]
         # linearly interpolate the point
-        return (info[1][0]+(info[2][0]-info[1][0])*percent, info[1][1]+(info[2][1]-info[1][1])*percent)
+        return (round(info[1][0]+(info[2][0]-info[1][0])*percent, 2), round(info[1][1]+(info[2][1]-info[1][1])*percent, 2))
 
 # -------------------- Kanji Class --------------------
 
@@ -229,8 +228,15 @@ class Kanji():
         self.svgList = []
         for i in svgList:
             self.svgList.append(alterValue(i, width = dimensions[0], height = dimensions[1], **{"stroke-width" : strokeWidth}, viewBox = f"0 0 {dimensions[0]} {dimensions[1]}"))
-        #print(self.svgList)
+        print(self.svgList)
         self.metadata = dict(width = dimensions[0], height = dimensions[1], strokeWidth = strokeWidth)
+
+        # linearly interpolated points for every stroke in this list
+        self.pBzPoints = []
+        for b in [Bezier(i) for i in self.svgList]:
+            self.pBzPoints.append([])
+            for p in range(0, 100):
+                self.pBzPoints[-1].append(b.bezierPercent(p/100))
         
         self.surfList = Kanji.svgTextToSurf(*self.svgList)
 
@@ -279,43 +285,46 @@ class Kanji():
             IOList.append(pyg.image.load(BytesIO(bytes(i, encoding = "utf-8"))).convert_alpha())
         return IOList if len(IOList) > 1 else IOList[0]
     
-    def scale(self, scale: float):
+    def scale(self):
         newSvgList = []
         for i in self.svgList:
-            newSvgList.append(alterValue(i, width = self.metadata["width"]*scale, height = self.metadata["height"]*scale, **{"stroke-width": self.metadata["strokeWidth"]*scale}))
+            newSvgList.append(alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}"))
         self.surfList = Kanji.svgTextToSurf(*newSvgList)
 
-# test rendering
-kanji = Kanji("食", (109, 109), 8)
-blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
+if __name__ == "__main__":
+    # test rendering
+    kanji = Kanji("食", (300, 300), 8)
+    blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
 
-testSVG = """<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
-<g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-	<path id="kvg:098df-s1" kvg:type="㇒" d="M52.75,10.5c0.11,0.98-0.19,2.67-0.97,3.93C45,25.34,31.75,41.19,14,51.5"/>
-</g>
-</svg>"""
+    testSVG = """<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
+    <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+        <path id="kvg:098df-s1" kvg:type="㇒" d="M52.75,10.5c0.11,0.98-0.19,2.67-0.97,3.93C45,25.34,31.75,41.19,14,51.5"/>
+    </g>
+    </svg>"""
 
-test = Bezier(alterValue(testSVG, width = 300, height = 300, **{"stroke-width" : 1}, viewBox = f"0 0 {300} {300}"))
+    test = Bezier(alterValue(testSVG, width = 300, height = 300, **{"stroke-width" : 1}, viewBox = f"0 0 {300} {300}"))
 
-# pygame
+    # pygame
 
-scale = 1
-running = True
+    scale = 1
+    running = True
 
-while running:
+    while running:
 
-    for event in pyg.event.get():
-        if event.type == pyg.QUIT:
-            running = False
-        if event.type == pyg.KEYUP:
-            if event.key == pyg.K_a:
-                scale -= 0.1
-            elif event.key == pyg.K_d:
-                scale += 0.1
+        for event in pyg.event.get():
+            if event.type == pyg.QUIT:
+                running = False
+            if event.type == pyg.KEYUP:
+                if event.key == pyg.K_a:
+                    scale -= 0.1
+                elif event.key == pyg.K_d:
+                    scale += 0.1
+            if event.type == pyg.WINDOWRESIZED:
+                gui.scaleDisplay(event, *gui.GUI.allGUI, kanji)
+        blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
+        #kanji.scale(scale)
+        gui.screen.fill("white")
+        pyg.Surface.blits(gui.screen, blitSequence)
+        gui.GUI.activeGUI.draw(gui.screen)
 
-    #kanji.scale(scale)
-    gui.screen.fill("white")
-    pyg.Surface.blits(gui.screen, blitSequence)
-    gui.GUI.activeGUI.draw(gui.screen)
-
-    pyg.display.flip()
+        pyg.display.flip()

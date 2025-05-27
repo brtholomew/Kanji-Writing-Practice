@@ -1,6 +1,7 @@
 # practice writing kanji
 import pygame as pyg
 import gui
+import svg
 
 pyg.init()
 clock = pyg.time.Clock()
