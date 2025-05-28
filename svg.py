@@ -3,10 +3,6 @@ import pygame as pyg
 from io import BytesIO
 import gui
 
-pyg.init()
-
-gui.initDisplay((300, 300))  
-
 # -------------------- SVG Functions --------------------
 def listToFloat(list: list):
     return float("".join(list))
@@ -228,15 +224,15 @@ class Kanji():
         self.svgList = []
         for i in svgList:
             self.svgList.append(alterValue(i, width = dimensions[0], height = dimensions[1], **{"stroke-width" : strokeWidth}, viewBox = f"0 0 {dimensions[0]} {dimensions[1]}"))
-        print(self.svgList)
+
         self.metadata = dict(width = dimensions[0], height = dimensions[1], strokeWidth = strokeWidth)
 
         # linearly interpolated points for every stroke in this list
         self.pBzPoints = []
         for b in [Bezier(i) for i in self.svgList]:
             self.pBzPoints.append([])
-            for p in range(0, 100):
-                self.pBzPoints[-1].append(b.bezierPercent(p/100))
+            for p in range(0, 50):
+                self.pBzPoints[-1].append(b.bezierPercent(p/49))
         
         self.surfList = Kanji.svgTextToSurf(*self.svgList)
 
@@ -293,8 +289,12 @@ class Kanji():
 
 if __name__ == "__main__":
     # test rendering
-    kanji = Kanji("食", (300, 300), 8)
-    blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
+    pyg.init()
+
+    gui.initDisplay((300, 300))  
+
+    testKanji = Kanji("食", (109, 109), 8)
+    blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
 
     testSVG = """<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
     <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
@@ -320,8 +320,8 @@ if __name__ == "__main__":
                 elif event.key == pyg.K_d:
                     scale += 0.1
             if event.type == pyg.WINDOWRESIZED:
-                gui.scaleDisplay(event, *gui.GUI.allGUI, kanji)
-        blitSequence = [(surf, (0, 0)) for surf in kanji.surfList]
+                gui.scaleDisplay(event, *gui.GUI.allGUI, testKanji)
+        blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
         #kanji.scale(scale)
         gui.screen.fill("white")
         pyg.Surface.blits(gui.screen, blitSequence)

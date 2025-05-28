@@ -27,6 +27,7 @@ class Stroke(pyg.sprite.Sprite):
         self.parent = sprite
         self.pos: gui.point = sprite.pos
         self.dimensions = sprite.dimensions
+        self.color = "white"
         self.points = []
 
         Stroke.strokeGroup.add(self)
@@ -36,20 +37,24 @@ class Stroke(pyg.sprite.Sprite):
         Draws a line on the frame\n
         """
         self.points.append([finalPos[0]/gui.scale, finalPos[1]/gui.scale])
-        pyg.draw.circle(self.image, "white", finalPos, Stroke.width/2)
-        pyg.draw.line(self.image, "white", self.initPos, finalPos, int(Stroke.width))
+        pyg.draw.circle(self.image, self.color, finalPos, Stroke.width/2)
+        pyg.draw.line(self.image, self.color, self.initPos, finalPos, int(Stroke.width))
         self.initPos = finalPos
 
     def scale(self):
         """
         Redraws the frame with the correct scaling
         """
+        
         Stroke.width = 8*gui.scale
         # reset the frame
         self.image = pyg.transform.scale(Stroke.frame, self.rect.size)
 
+        if not self.points:
+            return
+        
         # redraw every point onto it
-        temp = self.points
+        temp = self.points.copy()
         self.points = []
         self.initPos = (temp[0][0]*gui.scale, temp[0][1]*gui.scale)
 
@@ -79,7 +84,8 @@ def drawDrag(self:gui):
     self.strokes[-1].draw(finalPos)
 
 def drawPointsCheck(self:gui):
-    print(len(Stroke.strokeGroup))
+    pass
+    #print(len(Stroke.strokeGroup))
     #print(self.strokes[-1].points)
 
 def drawCheck(self:gui):
@@ -94,29 +100,81 @@ def undoStroke(self:gui):
         Stroke.strokeGroup.remove(stroke)
         stroke.points.pop()
 
+# hintGUI events
+def hintAnimate(self:gui):
+    pyg.time.set_timer(animateEvent, 10, 0)
+
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = "assets/grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
 drawGUI.strokes = []
 undoGUI = gui.GUI((85, 275), (40, 30), freed = undoStroke)
 submitGUI = gui.GUI((215, 275), (40, 30))
-hintGUI = gui.GUI((150, 275), (30, 30))
+hintGUI = gui.GUI((150, 275), (30, 30), freed = hintAnimate)
 gui.GUI.activate(drawGUI, undoGUI, submitGUI, hintGUI)
 
+# -------------------- Kanji Variables --------------------
+kanjiList = [
+    ["良"],
+    ["状", "態"],
+    ["食"]
+]
+kanjiDict = {}
+for i in kanjiList:
+    for k in i:
+        kanjiDict[k] = svg.Kanji(k, (175, 175), 8)
+
+prompt = "良"
+kanji = kanjiDict[prompt]
+
+# -------------------- Pygame Animation Events --------------------
+animateEvent = pyg.event.custom_type()
+def animate():
+    global animateCounter
+    # draw every stroke from the prompt pBzPoints list
+    index = int(animateCounter/len(kanji.pBzPoints[0]))
+    point = animateCounter%len(kanji.pBzPoints[0])
+    animateFrames[index].points.append(kanji.pBzPoints[index][point])
+    animateFrames[index].scale()
+    #print(f"index: {int(animateCounter/len(kanji.pBzPoints[0]))}, point #: {animateCounter%len(kanji.pBzPoints[0])}")
+    animateCounter += 1
+    if int(animateCounter/len(kanji.pBzPoints[0])) == len(kanji.pBzPoints):
+        pyg.time.set_timer(endAnimateEvent, 2500, 1)
+    else:
+        pyg.time.set_timer(animateEvent, 1, 1)
+
+endAnimateEvent = pyg.event.custom_type()
+def endAnimate():
+    global animateCounter
+    for i in animateFrames:
+        i.points = []
+        i.scale()
+    animateCounter = 0
+
+# -------------------- Animation Variables --------------------
+# TODO: make sure to change the amount of animation frames when new prompt is selected
+animateFrames = []
+for i in range(len(kanji.pBzPoints)):
+    animateFrames.append(Stroke(drawGUI))
+    animateFrames[-1].color = "gray"
+animateCounter = 0
+
 # -------------------- Main Loop --------------------
-prompt = "食"
 
 running = True
 
 while running:
     mouse_pos = pyg.mouse.get_pos()
-    #print(f"mouse x:{mouse_pos[0]}, translateX: {drawGUI.rect.topleft[0]}")
+
     for event in pyg.event.get():
         if event.type == pyg.QUIT:
             running = False
-        if event.type == pyg.WINDOWRESIZED:
+        elif event.type == pyg.WINDOWRESIZED:
             gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites())
+        elif event.type == animateEvent:
+            animate()
+        elif event.type == endAnimateEvent:
+            endAnimate()
         gui.GUI.interaction(event, mouse_pos)
-
     gui.screen.fill("black")
 
     gui.GUI.activeGUI.draw(gui.screen)
