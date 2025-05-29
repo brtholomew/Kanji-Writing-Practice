@@ -180,6 +180,7 @@ class Bezier():
             # explicit form of equation for cubic bezier curve
             self.functions.append(lambda t, i=i: ((1-t)**3*i[0][0] + 3*(1-t)**2*t*i[1][0] + 3*(1-t)*t**2*i[2][0] + t**3*i[3][0], (1-t)**3*i[0][1] + 3*(1-t)**2*t*i[1][1] + 3*(1-t)*t**2*i[2][1] + t**3*i[3][1]))
 
+    def distInfoInit(self):
         # get the dist info across all bezier curves
         # code taken from roblox blog given to me by issai (btw if they take down the blog, is it illegal for me to use it still?)
         # thank you issai https://web.archive.org/web/20201115172941/https://developer.roblox.com/en-us/articles/Bezier-curves
@@ -197,6 +198,8 @@ class Bezier():
         """
         Returns the approximate point of the combined beziers based on the percent linear distance it has traveled in total\n
         """
+        if not hasattr(self, "distInfo"):
+            self.distInfoInit()
         # thank you issai https://web.archive.org/web/20201115172941/https://developer.roblox.com/en-us/articles/Bezier-curves
         dist = t*self.total
         if dist == 0 or dist == self.total:
@@ -235,6 +238,7 @@ class Kanji():
                 self.pBzPoints[-1].append(b.bezierPercent(p/49))
         
         self.surfList = Kanji.svgTextToSurf(*self.svgList)
+        self.maskList = [pyg.mask.from_surface(i) for i in self.surfList]
 
     @staticmethod
     def findKanji(kanji: str):
@@ -282,10 +286,11 @@ class Kanji():
         return IOList if len(IOList) > 1 else IOList[0]
     
     def scale(self):
-        newSvgList = []
-        for i in self.svgList:
-            newSvgList.append(alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}"))
-        self.surfList = Kanji.svgTextToSurf(*newSvgList)
+        # newSvgList = []
+        # for i in self.svgList:
+        #     newSvgList.append(alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}"))
+        self.surfList = Kanji.svgTextToSurf(*[alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}") for i in self.svgList])
+        self.maskList = [pyg.mask.from_surface(i) for i in self.surfList]
 
 if __name__ == "__main__":
     # test rendering

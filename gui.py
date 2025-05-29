@@ -71,16 +71,23 @@ class GUI(pyg.sprite.Sprite):
     activeGUI = pyg.sprite.Group()
     allGUI = []
 
-    def __init__(self, pos: point, dimensions: point, image = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!"), active: guiEvent = lambda x: None):
+    def __init__(self, pos: point, dimensions: point, image: str | pyg.surface.Surface = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!"), active: guiEvent = lambda x: None):
         super().__init__()
         self.pos: point = pos
         self.dimensions: point = dimensions
-        self.ogimage = pyg.image.load(image).convert_alpha()
-        self.image = pyg.transform.scale(self.ogimage, self.dimensions)
-        self.rect = self.image.get_rect(center = self.pos)
+        if isinstance(image, str):
+            self.ogimage = pyg.image.load(image).convert_alpha()
+        elif isinstance(image, pyg.surface.Surface):
+            self.ogimage = image
+        else:
+            raise TypeError("Invalid image type")
+        self.image = pyg.transform.scale(self.ogimage, [i*scale for i in self.dimensions])
+        self.rect = self.image.get_rect(center = (pos[0]*scaleX, pos[1]*scaleY))
 
         self.dragging = False
         self.hovering = False
+        self.enabled = True 
+
         self.pressed: guiEvent = pressed
         self.freed: guiEvent = freed
         self.heave: guiEvent = heave
@@ -88,9 +95,10 @@ class GUI(pyg.sprite.Sprite):
         GUI.allGUI.append(self)
 
     @classmethod
-    def interaction(cls, event, mouse_pos):
+    def interaction(cls, event):
         """
-        Goes into the event loop, handles all possible mouse interactions with GUI\n
+        Goes into the event loop, handles most possible mouse interactions with GUI\n
+        Requires the gui to be updated to work
         """
         for obj in cls.activeGUI:
             if obj.hovering:
@@ -111,18 +119,31 @@ class GUI(pyg.sprite.Sprite):
     def deactivate(cls, *args):
         cls.activeGUI.remove(args)
 
+    @staticmethod
+    def enable(*args):
+        for i in args:
+            i.enabled = True
+
+    @staticmethod
+    def disable(*args):
+        for i in args:
+            i.enabled = False
+
     # maybe ill add functionality for buttons physically going down, sound effects, etc
     def clicked(self):
-        self.dragging = True
-        self.pressed(self)
+        if self.enabled:
+            self.dragging = True
+            self.pressed(self)
 
     def released(self):
-        self.dragging = False
-        self.freed(self)
+        if self.enabled:
+            self.dragging = False
+            self.freed(self)
 
     def dragged(self):
-        self.heave(self)
+        if self.enabled:
+            self.heave(self)
 
     def update(self, mouse_pos: point):
-        self.hovering = False if not self.rect.collidepoint(mouse_pos) else True
+        self.hovering = True if self.rect.collidepoint(mouse_pos) else False
         self.active(self)

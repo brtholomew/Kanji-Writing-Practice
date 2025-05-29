@@ -73,7 +73,6 @@ def drawInit(self:gui):
     translationX, translationY = self.rect.topleft
     finalPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
 
-    #Stroke.initPos = finalPos
     self.strokes[-1].initPos = finalPos
     self.strokes[-1].draw(finalPos)
 
@@ -103,13 +102,48 @@ def undoStroke(self:gui):
 # hintGUI events
 def hintAnimate(self:gui):
     pyg.time.set_timer(animateEvent, 10, 0)
+    gui.GUI.disable(self)
+
+# submitGUI events
+def submit(self:gui):
+    # first disable every other gui to prevent funny business
+    gui.GUI.disable(drawGUI, undoGUI, hintGUI)
+    strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
+    #strokeMasks = [pyg.mask.from_surface(i.image) for i in animateFrames]
+    # scale the masks up just a LITTLE bit so it's not pain and misery
+    # TODO: stroke scaling APPEARS weird because the scale is applied twice (once here and again when the guis are drawn)
+    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : Stroke.width*1.5}))) for i in kanji.svgList]
+    kanjiMasks = [pyg.mask.from_surface(i.image) for i in testingKanjiMasks]
+    scores = []
+    for i in range(len(strokeMasks)):
+        try:
+            # NOTE: we are comparing the scaled mask (kanjiMasks) to its original mask (kanji.maskList)
+            grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/kanji.maskList[i].count(), 1.0)
+            scores.append(grade)
+            redGreen = redYellowGreenBezier.functions[0](grade)
+            pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
+            pyg.pixelarray.PixelArray(testingKanjiMasks[i].image).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
+            testingKanjiMasks[i].ogimage.set_alpha(127)
+            testingKanjiMasks[i].image.set_alpha(127)
+        except IndexError:
+            scores.append(0)
+    
+    if len(strokeMasks) < len(kanjiMasks):
+        for i in range(len(kanjiMasks)-len(strokeMasks)):
+            scores.append(0)
+    
+    gui.GUI.activate(*testingKanjiMasks)
+
+    score = sum(scores)/len(kanjiMasks)
+    print(score)
+
 
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = "assets/grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
 drawGUI.strokes = []
 undoGUI = gui.GUI((85, 275), (40, 30), freed = undoStroke)
-submitGUI = gui.GUI((215, 275), (40, 30))
 hintGUI = gui.GUI((150, 275), (30, 30), freed = hintAnimate)
+submitGUI = gui.GUI((215, 275), (40, 30), freed = submit)
 gui.GUI.activate(drawGUI, undoGUI, submitGUI, hintGUI)
 
 # -------------------- Kanji Variables --------------------
@@ -124,9 +158,11 @@ for i in kanjiList:
         kanjiDict[k] = svg.Kanji(k, (175, 175), 8)
 
 prompt = "良"
-kanji = kanjiDict[prompt]
+kanji = svg.Kanji("良", (175, 175), 8)
+# TODO: uncomment this
+#kanji = kanjiDict[prompt]
 
-# -------------------- Pygame Animation Events --------------------
+# -------------------- Pygame Events --------------------
 animateEvent = pyg.event.custom_type()
 def animate():
     global animateCounter
@@ -135,7 +171,7 @@ def animate():
     point = animateCounter%len(kanji.pBzPoints[0])
     animateFrames[index].points.append(kanji.pBzPoints[index][point])
     animateFrames[index].scale()
-    #print(f"index: {int(animateCounter/len(kanji.pBzPoints[0]))}, point #: {animateCounter%len(kanji.pBzPoints[0])}")
+
     animateCounter += 1
     if int(animateCounter/len(kanji.pBzPoints[0])) == len(kanji.pBzPoints):
         pyg.time.set_timer(endAnimateEvent, 2500, 1)
@@ -149,6 +185,8 @@ def endAnimate():
         i.points = []
         i.scale()
     animateCounter = 0
+    gui.GUI.enable(hintGUI)
+    print("we're done here")
 
 # -------------------- Animation Variables --------------------
 # TODO: make sure to change the amount of animation frames when new prompt is selected
@@ -159,6 +197,8 @@ for i in range(len(kanji.pBzPoints)):
 animateCounter = 0
 
 # -------------------- Main Loop --------------------
+# where does this go???
+redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 
 running = True
 
@@ -169,14 +209,17 @@ while running:
         if event.type == pyg.QUIT:
             running = False
         elif event.type == pyg.WINDOWRESIZED:
-            gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites())
+            # TODO: find a replacement for kanjiDict.values() that actually works
+            gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), kanji)
         elif event.type == animateEvent:
             animate()
         elif event.type == endAnimateEvent:
             endAnimate()
-        gui.GUI.interaction(event, mouse_pos)
+        gui.GUI.interaction(event)
     gui.screen.fill("black")
 
+    # TODO: testing thing, remove later
+    #pyg.Surface.blits(gui.screen, [(surf, drawGUI.rect.topleft) for surf in kanji.surfList])
     gui.GUI.activeGUI.draw(gui.screen)
     gui.GUI.activeGUI.update(mouse_pos)
     Stroke.strokeGroup.draw(gui.screen)
