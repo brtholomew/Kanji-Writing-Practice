@@ -118,9 +118,8 @@ def alterValue(svg: str, **kwargs):
 
         if keyword == "width" or keyword == "height":
             # hey why didn't you just use an external library for this?
-            # ... extract what's inside of the d parameter
             d = extractPathParameter(svg)
-            # reconstruct d parameter while applying the transformations
+
             temp = ""
             # for every move command
             for i in d:
@@ -131,7 +130,6 @@ def alterValue(svg: str, **kwargs):
                         x = float("".join(c[0]))*(value/float(oldValue) if keyword == 'width' else 1)
                         y = float("".join(c[1]))*(value/float(oldValue) if keyword == 'height' else 1)
                         temp = f"{temp}{round(x, 2)},{round(y, 2)},"
-                    # pop the last comma off
                     temp = list(temp)
                     del temp[-1]
                     temp = "".join(temp)
@@ -292,6 +290,7 @@ class Kanji():
         self.surfList = Kanji.svgTextToSurf(*[alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}") for i in self.svgList])
         self.maskList = [pyg.mask.from_surface(i) for i in self.surfList]
 
+
 if __name__ == "__main__":
     # test rendering
     pyg.init()
@@ -299,6 +298,9 @@ if __name__ == "__main__":
     gui.initDisplay((300, 300))  
 
     testKanji = Kanji("食", (109, 109), 8)
+    # TODO: cannot change color of svg with altervalue
+    testKanji.svgList = [alterValue(i, stroke = "#0000FF") for i in testKanji.svgList]
+    #print(testKanji.svgList)
     blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
 
     testSVG = """<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">

@@ -106,19 +106,16 @@ def hintAnimate(self:gui):
 
 # submitGUI events
 def submit(self:gui):
-    # first disable every other gui to prevent funny business
     gui.GUI.disable(drawGUI, undoGUI, hintGUI)
+
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
     #strokeMasks = [pyg.mask.from_surface(i.image) for i in animateFrames]
-    # scale the masks up just a LITTLE bit so it's not pain and misery
-    # TODO: stroke scaling APPEARS weird because the scale is applied twice (once here and again when the guis are drawn)
-    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : Stroke.width*1.5}))) for i in kanji.svgList]
+    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))) for i in kanji.svgList]
     kanjiMasks = [pyg.mask.from_surface(i.image) for i in testingKanjiMasks]
     scores = []
     for i in range(len(strokeMasks)):
         try:
-            # NOTE: we are comparing the scaled mask (kanjiMasks) to its original mask (kanji.maskList)
-            grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/kanji.maskList[i].count(), 1.0)
+            grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/max(kanji.maskList[i].count(), strokeMasks[i].count()), 1.0)
             scores.append(grade)
             redGreen = redYellowGreenBezier.functions[0](grade)
             pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
@@ -131,10 +128,16 @@ def submit(self:gui):
     if len(strokeMasks) < len(kanjiMasks):
         for i in range(len(kanjiMasks)-len(strokeMasks)):
             scores.append(0)
+            pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (0, 0, 255))
+            pyg.pixelarray.PixelArray(testingKanjiMasks[i].image).replace((0, 0, 0), (0, 0, 255))
+            testingKanjiMasks[i].ogimage.set_alpha(127)
+            testingKanjiMasks[i].image.set_alpha(127)
     
     gui.GUI.activate(*testingKanjiMasks)
 
-    score = sum(scores)/len(kanjiMasks)
+    score = round(sum(scores)/len(kanjiMasks), 2)
+    redGreen = redYellowGreenBezier.functions[0](score)
+    accuracyGUI.write(f"{int(score*100)}%", (redGreen[0], redGreen[1], 0))
     print(score)
 
 
@@ -144,7 +147,9 @@ drawGUI.strokes = []
 undoGUI = gui.GUI((85, 275), (40, 30), freed = undoStroke)
 hintGUI = gui.GUI((150, 275), (30, 30), freed = hintAnimate)
 submitGUI = gui.GUI((215, 275), (40, 30), freed = submit)
-gui.GUI.activate(drawGUI, undoGUI, submitGUI, hintGUI)
+promptGUI = gui.GUI((150, 30), (30, 30), image = "assets/grid.png")
+accuracyGUI = gui.GUI((215, 30), (60, 30))
+gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
 
 # -------------------- Kanji Variables --------------------
 kanjiList = [
@@ -161,6 +166,8 @@ prompt = "良"
 kanji = svg.Kanji("良", (175, 175), 8)
 # TODO: uncomment this
 #kanji = kanjiDict[prompt]
+promptGUI.write(prompt)
+accuracyGUI.write("--%")
 
 # -------------------- Pygame Events --------------------
 animateEvent = pyg.event.custom_type()
@@ -201,7 +208,7 @@ animateCounter = 0
 redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 
 running = True
-
+print(gui.GUI.allGUI)
 while running:
     mouse_pos = pyg.mouse.get_pos()
 
