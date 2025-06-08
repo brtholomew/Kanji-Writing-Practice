@@ -1,16 +1,17 @@
 # module for handling svgs
 import pygame as pyg
-from io import BytesIO
 import gui
+from io import BytesIO
+from typing import Union
 
 # -------------------- SVG Functions --------------------
 def listToFloat(list: list):
     return float("".join(list))
 
-def distanceFormula(p1: gui.point, p2: gui.point):
+def distanceFormula(p1: tuple[int, int], p2: tuple[int, int]):
     return ((p2[0]-p1[0])**2+(p2[1]-p1[1])**2)**0.5
 
-def replaceSubstring(stri: str, newValue: str | float, index: tuple):
+def replaceSubstring(stri: str, newValue: Union[str, float], index: tuple):
     """
     Returns a string with part of it changed based on a start/end index\n
     Also returns the part that was changed
@@ -220,7 +221,7 @@ class Kanji():
     """
     Class for breaking down written kanji into its individual strokes
     """
-    def __init__(self, kanji: str, dimensions: gui.point, strokeWidth: float):
+    def __init__(self, kanji: str, dimensions: tuple[int, int], strokeWidth: float):
         svgList = Kanji.deconstructKanji(kanji)[0]
         self.svgList = []
         for i in svgList:

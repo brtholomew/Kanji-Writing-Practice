@@ -1,8 +1,12 @@
 # module for handling gui elements (such as buttons)
 import pygame as pyg
-from typing import Callable, TypeAlias
+from os import path
+from typing import Callable, Union #, TypeAlias
 
 pyg.init()
+
+def assetPath(file: str):
+    return path.join(path.dirname(__file__, file))
 
 def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     """
@@ -55,8 +59,8 @@ def scaleDisplay(event, *args):
 
     currentSize = displaySize
 
-point: TypeAlias = tuple[int, int]
-guiEvent: TypeAlias = Callable[["GUI"], None]
+# point: TypeAlias = tuple[int, int]
+# guiEvent: TypeAlias = Callable[["GUI"], None]
 
 class GUI(pyg.sprite.Sprite):
     """
@@ -74,10 +78,10 @@ class GUI(pyg.sprite.Sprite):
     activeGUI = pyg.sprite.Group()
     allGUI = []
 
-    def __init__(self, pos: point, dimensions: point, image: str | pyg.surface.Surface = "assets/placeholder.png", pressed: guiEvent = lambda x: print(f"{x} was clicked!"), freed: guiEvent = lambda x: print(f"{x} was released!"), heave: guiEvent = lambda x: print(f"{x} is being dragged!"), active: guiEvent = lambda x: None):
+    def __init__(self, pos: tuple[int, int], dimensions: tuple[int, int], image: Union[str, pyg.surface.Surface] = "assets/placeholder.png", pressed:  Callable[["GUI"], None] = lambda x: print(f"{x} was clicked!"), freed: Callable[["GUI"], None] = lambda x: print(f"{x} was released!"), heave: Callable[["GUI"], None] = lambda x: print(f"{x} is being dragged!"), active: Callable[["GUI"], None] = lambda x: None):
         super().__init__()
-        self.pos: point = pos
-        self.dimensions: point = dimensions
+        self.pos: tuple[int, int] = pos
+        self.dimensions: tuple[int, int] = dimensions
         if isinstance(image, str):
             self.ogimage = pyg.image.load(image).convert_alpha()
         elif isinstance(image, pyg.surface.Surface):
@@ -91,10 +95,10 @@ class GUI(pyg.sprite.Sprite):
         self.hovering = False
         self.enabled = True 
 
-        self.pressed: guiEvent = pressed
-        self.freed: guiEvent = freed
-        self.heave: guiEvent = heave
-        self.active: guiEvent = active
+        self.pressed: Callable[["GUI"], None] = pressed
+        self.freed: Callable[["GUI"], None] = freed
+        self.heave: Callable[["GUI"], None] = heave
+        self.active: Callable[["GUI"], None] = active
         GUI.allGUI.append(self)
 
     @classmethod
@@ -161,6 +165,6 @@ class GUI(pyg.sprite.Sprite):
         if self.enabled:
             self.heave(self)
 
-    def update(self, mouse_pos: point):
+    def update(self, mouse_pos: tuple[int, int]):
         self.hovering = True if self.rect.collidepoint(mouse_pos) else False
         self.active(self)
