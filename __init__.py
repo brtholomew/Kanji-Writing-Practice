@@ -7,9 +7,8 @@ sys.path.insert(0, path.dirname(__file__))
 import pygame as pyg
 import gui
 import svg
-#from aqt import gui_hooks
-
-#gui_hooks.reviewer_did_answer_card.append()
+from aqt import gui_hooks, mw
+from anki.hooks import wrap
 
 pyg.init()
 clock = pyg.time.Clock()
@@ -30,7 +29,7 @@ class Stroke(pyg.sprite.Sprite):
     An instance is created on the designated sprite\n
     """
     
-    frame = pyg.image.load("assets/frame.png").convert_alpha()
+    frame = pyg.image.load(gui.assetPath("frame.png")).convert_alpha()
     strokeGroup = pyg.sprite.Group()
 
     width = 8
@@ -123,7 +122,6 @@ def hintAnimate(self:gui):
 # submitGUI events
 def submit(self:gui):
     gui.GUI.disable(drawGUI, undoGUI, hintGUI)
-
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
     #strokeMasks = [pyg.mask.from_surface(i.image) for i in animateFrames]
     testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))) for i in kanji.svgList]
@@ -160,12 +158,12 @@ def newKanjiInit():
     pass
 
 # -------------------- GUI Initializing --------------------
-drawGUI = gui.GUI((150, 150), (175, 175), image = "assets/grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
+drawGUI = gui.GUI((150, 150), (175, 175), image = gui.assetPath("grid.png"), pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
 drawGUI.strokes = []
 undoGUI = gui.GUI((85, 275), (40, 30), freed = undoStroke)
 hintGUI = gui.GUI((150, 275), (30, 30), freed = hintAnimate)
 submitGUI = gui.GUI((215, 275), (40, 30), freed = submit)
-promptGUI = gui.GUI((150, 30), (30, 30), image = "assets/grid.png")
+promptGUI = gui.GUI((150, 30), (30, 30), image = gui.assetPath("grid.png"))
 accuracyGUI = gui.GUI((215, 30), (60, 30))
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
 
@@ -223,28 +221,59 @@ animateCounter = 0
 # -------------------- Main Loop --------------------
 # where does this go???
 redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
+pyg.display.quit()
+running = False
 
-running = True
+def cardNote(card):
+    print(mw.state)
+    for i in card.note().fields[0]:
+        print(ord(i))
 
-while running:
-    mouse_pos = pyg.mouse.get_pos()
+def kanjiWritingPractice(a):
+    global mouse_pos, running
 
-    for event in pyg.event.get():
-        if event.type == pyg.QUIT:
-            running = False
-        elif event.type == pyg.WINDOWRESIZED:
-            # TODO: find a replacement for kanjiDict.values() that actually works
-            gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), kanji)
-        elif event.type == animateEvent:
-            animate()
-        elif event.type == endAnimateEvent:
-            endAnimate()
-        gui.GUI.interaction(event)
-    gui.screen.fill("black")
+    if not hasattr(mw.reviewer, "state") or mw.state != "review" or running:
+        print("returning")
+        return
+    print("proceeding")
 
-    gui.GUI.activeGUI.draw(gui.screen)
-    gui.GUI.activeGUI.update(mouse_pos)
-    Stroke.strokeGroup.draw(gui.screen)
+    pyg.display.init()
+    gui.initDisplay((300, 300), "Kanji Writing Practice")
+    running = True
 
-    pyg.display.flip()
-    clock.tick(60)
+    while running:
+        mouse_pos = pyg.mouse.get_pos()
+
+        for event in pyg.event.get():
+            if event.type == pyg.QUIT:
+                running = False
+            elif event.type == pyg.WINDOWRESIZED:
+                # TODO: find a replacement for kanjiDict.values() that actually works
+                gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), kanji)
+            elif event.type == animateEvent:
+                animate()
+            elif event.type == endAnimateEvent:
+                endAnimate()
+            gui.GUI.interaction(event)
+        gui.screen.fill("black")
+
+        gui.GUI.activeGUI.draw(gui.screen)
+        gui.GUI.activeGUI.update(mouse_pos)
+        Stroke.strokeGroup.draw(gui.screen)
+
+        pyg.display.flip()
+        clock.tick(60)
+    pyg.display.quit()
+    print("leaving")
+
+def terminateKWP():
+    global running
+    running = False
+
+def testFunc(a,b):
+    print(f"current state: {mw.state}")
+
+gui_hooks.reviewer_did_show_question.append(cardNote)
+gui_hooks.state_did_change.append(testFunc)
+gui_hooks.reviewer_did_show_question.append(kanjiWritingPractice)
+gui_hooks.reviewer_will_end.append(terminateKWP)

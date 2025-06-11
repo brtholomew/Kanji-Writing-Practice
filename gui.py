@@ -6,7 +6,7 @@ from typing import Callable, Union #, TypeAlias
 pyg.init()
 
 def assetPath(file: str):
-    return path.join(path.dirname(__file__, file))
+    return path.join(path.dirname(__file__), "assets", file)
 
 def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     """
@@ -78,7 +78,7 @@ class GUI(pyg.sprite.Sprite):
     activeGUI = pyg.sprite.Group()
     allGUI = []
 
-    def __init__(self, pos: tuple[int, int], dimensions: tuple[int, int], image: Union[str, pyg.surface.Surface] = "assets/placeholder.png", pressed:  Callable[["GUI"], None] = lambda x: print(f"{x} was clicked!"), freed: Callable[["GUI"], None] = lambda x: print(f"{x} was released!"), heave: Callable[["GUI"], None] = lambda x: print(f"{x} is being dragged!"), active: Callable[["GUI"], None] = lambda x: None):
+    def __init__(self, pos: tuple[int, int], dimensions: tuple[int, int], image: Union[str, pyg.surface.Surface] = assetPath("placeholder.png"), pressed:  Callable[["GUI"], None] = lambda x: print(f"{x} was clicked!"), freed: Callable[["GUI"], None] = lambda x: print(f"{x} was released!"), heave: Callable[["GUI"], None] = lambda x: print(f"{x} is being dragged!"), active: Callable[["GUI"], None] = lambda x: None):
         super().__init__()
         self.pos: tuple[int, int] = pos
         self.dimensions: tuple[int, int] = dimensions

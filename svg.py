@@ -3,6 +3,7 @@ import pygame as pyg
 import gui
 from io import BytesIO
 from typing import Union
+from os import path
 
 # -------------------- SVG Functions --------------------
 def listToFloat(list: list):
@@ -245,7 +246,7 @@ class Kanji():
         Returns the file path for a desired kanji
         """
         fileName = hex(ord(kanji)).replace("x", "")
-        return f"kanji/{fileName}.svg"
+        return path.join(path.dirname(__file__), "kanji", f"{fileName}.svg")
 
     @staticmethod
     def deconstructKanji(kanji: str):
