@@ -31,6 +31,7 @@ class Deck():
 
     @classmethod
     def newCard(cls, question: str):
+        cls.reset()
         for c in question:
             # code taken from Kanji Colorizer: https://github.com/cayennes/kanji-colorize/blob/main/anki/kanji_colorizer.py
             print(ord(c) >= 19968 and ord(c) <= 40879)
@@ -230,63 +231,12 @@ def newKanjiInit():
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = gui.assetPath("grid.png"), pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
 drawGUI.strokes = []
-undoGUI = gui.GUI((85, 275), (40, 30), freed = undoStroke)
-hintGUI = gui.GUI((150, 275), (30, 30), freed = hintAnimate)
-submitGUI = gui.GUI((215, 275), (40, 30), freed = submit)
+undoGUI = gui.GUI((85, 275), (40, 30), image = gui.Spritesheet((500, 500), "undogui.png"), freed = undoStroke)
+hintGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "hintgui.png"), freed = hintAnimate)
+submitGUI = gui.GUI((215, 275), (40, 30), image = gui.Spritesheet((500, 500), "submitgui.png") , freed = submit)
 promptGUI = gui.GUI((150, 30), (30, 30), image = gui.assetPath("grid.png"))
 accuracyGUI = gui.GUI((215, 30), (60, 30))
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
-
-# -------------------- Kanji Variables --------------------
-# kanjiList = [
-#     ["良"],
-#     ["状", "態"],
-#     ["食"]
-# ]
-# kanjiDict = {}
-# for i in kanjiList:
-#     for k in i:
-#         kanjiDict[k] = svg.Kanji(k, (175, 175), 8)
-
-# prompt = "良"
-# kanji = svg.Kanji("良", (175, 175), 8)
-# # TODO: uncomment this
-# #kanji = kanjiDict[prompt]
-# promptGUI.write(prompt)
-# accuracyGUI.write("--%")
-
-# -------------------- Pygame Events --------------------
-# animateEvent = pyg.event.custom_type()
-# def animate():
-#     global animateCounter
-#     # draw every stroke from the prompt pBzPoints list
-#     index = int(animateCounter/len(kanji.pBzPoints[0]))
-#     point = animateCounter%len(kanji.pBzPoints[0])
-#     animateFrames[index].points.append(kanji.pBzPoints[index][point])
-#     animateFrames[index].scale()
-
-#     animateCounter += 1
-#     if int(animateCounter/len(kanji.pBzPoints[0])) == len(kanji.pBzPoints):
-#         pyg.time.set_timer(endAnimateEvent, 2500, 1)
-#     else:
-#         pyg.time.set_timer(animateEvent, 1, 1)
-
-# endAnimateEvent = pyg.event.custom_type()
-# def endAnimate():
-#     global animateCounter
-#     for i in animateFrames:
-#         i.points = []
-#         i.scale()
-#     animateCounter = 0
-#     gui.GUI.enable(hintGUI)
-
-# -------------------- Animation Variables --------------------
-# TODO: make sure to change the amount of animation frames when new prompt is selected
-# animateFrames = []
-# for i in range(len(kanji.pBzPoints)):
-#     animateFrames.append(Stroke(drawGUI))
-#     animateFrames[-1].color = "gray"
-# animateCounter = 0
 
 # -------------------- Main Loop --------------------
 pyg.display.quit()
@@ -367,3 +317,4 @@ gui_hooks.state_did_change.append(testFunc)
 gui_hooks.reviewer_did_show_question.append(kanjiWritingPractice)
 gui_hooks.reviewer_did_show_answer.append(terminateKWP)
 gui_hooks.reviewer_will_end.append(terminateKWP)
+gui_hooks.profile_will_close.append(terminateKWP)
