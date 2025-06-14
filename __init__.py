@@ -1,6 +1,8 @@
 # practice writing kanji
 import sys
 from os import path
+from threading import Thread
+from typing import Union
 # bundling pygame
 sys.path.insert(0, path.dirname(__file__))
 
@@ -8,7 +10,6 @@ import pygame as pyg
 import gui
 import svg
 from aqt import gui_hooks, mw
-from anki.hooks import wrap
 
 pyg.init()
 clock = pyg.time.Clock()
@@ -16,12 +17,82 @@ clock = pyg.time.Clock()
 # pygame screen
 gui.initDisplay((300, 300), "Kanji Writing Practice")
 
+# where does this go???
+redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
+
 class Deck():
     """
-    Processes the kanji anki deck selected for studying
+    Processes the anki card
     """
-    def __init__(self):
-        pass
+    prompt = []
+    kanjiDict = {"N/A" : "N/A"}
+    counter = 0
+    kanji: Union[svg.Kanji, str] = "N/A"
+
+    @classmethod
+    def newCard(cls, question: str):
+        for c in question:
+            # code taken from Kanji Colorizer: https://github.com/cayennes/kanji-colorize/blob/main/anki/kanji_colorizer.py
+            print(ord(c) >= 19968 and ord(c) <= 40879)
+            if ord(c) >= 19968 and ord(c) <= 40879:
+                cls.prompt.append(c)
+                try:
+                    cls.kanjiDict[c] = svg.Kanji(c, (175, 175), 8)
+                except FileNotFoundError:
+                    pass
+        if not cls.prompt:
+            cls.prompt.append("N/A")
+            cls.kanji = "N/A"
+            return
+        cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
+
+    @classmethod
+    def next(cls):
+        cls.counter += 1
+        cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
+    
+    @classmethod
+    def reset(cls):
+        cls.prompt = []
+        cls.counter = 0
+
+animateEvent = pyg.event.custom_type()
+endAnimateEvent = pyg.event.custom_type()
+class Animate():
+    """
+    Handles animating the kanji drawing
+    """
+    frames = []
+    counter = 0
+
+    @classmethod
+    def newAnimation(cls, kanji: svg.Kanji):
+        for i in range(len(kanji.pBzPoints)):
+            cls.frames.append(Stroke(drawGUI))
+            cls.frames[-1].color = "gray"
+
+    @classmethod
+    def begin(cls):
+        # draw every stroke from the prompt pBzPoints list
+        index = int(cls.counter/len(Deck.kanji.pBzPoints[0]))
+        point = cls.counter%len(Deck.kanji.pBzPoints[0])
+        cls.frames[index].points.append(Deck.kanji.pBzPoints[index][point])
+        cls.frames[index].scale()
+
+        cls.counter += 1
+        if int(cls.counter/len(Deck.kanji.pBzPoints[0])) == len(Deck.kanji.pBzPoints):
+            pyg.time.set_timer(endAnimateEvent, 2500, 1)
+        else:
+            pyg.time.set_timer(animateEvent, 1, 1)
+
+    @classmethod
+    def end(cls):
+        for i in cls.frames:
+            i.points = []
+            # TODO: is this necessary?
+            i.scale()
+        cls.counter = 0
+        gui.GUI.enable(hintGUI)
 
 class Stroke(pyg.sprite.Sprite):
     """
@@ -76,7 +147,6 @@ class Stroke(pyg.sprite.Sprite):
         for i in temp:
             self.draw((i[0]*gui.scale, i[1]*gui.scale))
 
-
 # -------------------- GUI Events --------------------
 # drawGUI events
 def drawInit(self:gui):
@@ -121,15 +191,16 @@ def hintAnimate(self:gui):
 
 # submitGUI events
 def submit(self:gui):
-    gui.GUI.disable(drawGUI, undoGUI, hintGUI)
+    gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
+
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
     #strokeMasks = [pyg.mask.from_surface(i.image) for i in animateFrames]
-    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))) for i in kanji.svgList]
+    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))) for i in Deck.kanji.svgList]
     kanjiMasks = [pyg.mask.from_surface(i.image) for i in testingKanjiMasks]
     scores = []
     for i in range(len(strokeMasks)):
         try:
-            grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/max(kanji.maskList[i].count(), strokeMasks[i].count()), 1.0)
+            grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/max(Deck.kanji.maskList[i].count(), strokeMasks[i].count()), 1.0)
             scores.append(grade)
             redGreen = redYellowGreenBezier.functions[0](grade)
             pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
@@ -152,7 +223,6 @@ def submit(self:gui):
     score = round(sum(scores)/len(kanjiMasks), 2)
     redGreen = redYellowGreenBezier.functions[0](score)
     accuracyGUI.write(f"{int(score*100)}%", (redGreen[0], redGreen[1], 0))
-    print(score)
 
 def newKanjiInit():
     pass
@@ -168,68 +238,82 @@ accuracyGUI = gui.GUI((215, 30), (60, 30))
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
 
 # -------------------- Kanji Variables --------------------
-kanjiList = [
-    ["良"],
-    ["状", "態"],
-    ["食"]
-]
-kanjiDict = {}
-for i in kanjiList:
-    for k in i:
-        kanjiDict[k] = svg.Kanji(k, (175, 175), 8)
+# kanjiList = [
+#     ["良"],
+#     ["状", "態"],
+#     ["食"]
+# ]
+# kanjiDict = {}
+# for i in kanjiList:
+#     for k in i:
+#         kanjiDict[k] = svg.Kanji(k, (175, 175), 8)
 
-prompt = "良"
-kanji = svg.Kanji("良", (175, 175), 8)
-# TODO: uncomment this
-#kanji = kanjiDict[prompt]
-promptGUI.write(prompt)
-accuracyGUI.write("--%")
+# prompt = "良"
+# kanji = svg.Kanji("良", (175, 175), 8)
+# # TODO: uncomment this
+# #kanji = kanjiDict[prompt]
+# promptGUI.write(prompt)
+# accuracyGUI.write("--%")
 
 # -------------------- Pygame Events --------------------
-animateEvent = pyg.event.custom_type()
-def animate():
-    global animateCounter
-    # draw every stroke from the prompt pBzPoints list
-    index = int(animateCounter/len(kanji.pBzPoints[0]))
-    point = animateCounter%len(kanji.pBzPoints[0])
-    animateFrames[index].points.append(kanji.pBzPoints[index][point])
-    animateFrames[index].scale()
+# animateEvent = pyg.event.custom_type()
+# def animate():
+#     global animateCounter
+#     # draw every stroke from the prompt pBzPoints list
+#     index = int(animateCounter/len(kanji.pBzPoints[0]))
+#     point = animateCounter%len(kanji.pBzPoints[0])
+#     animateFrames[index].points.append(kanji.pBzPoints[index][point])
+#     animateFrames[index].scale()
 
-    animateCounter += 1
-    if int(animateCounter/len(kanji.pBzPoints[0])) == len(kanji.pBzPoints):
-        pyg.time.set_timer(endAnimateEvent, 2500, 1)
-    else:
-        pyg.time.set_timer(animateEvent, 1, 1)
+#     animateCounter += 1
+#     if int(animateCounter/len(kanji.pBzPoints[0])) == len(kanji.pBzPoints):
+#         pyg.time.set_timer(endAnimateEvent, 2500, 1)
+#     else:
+#         pyg.time.set_timer(animateEvent, 1, 1)
 
-endAnimateEvent = pyg.event.custom_type()
-def endAnimate():
-    global animateCounter
-    for i in animateFrames:
-        i.points = []
-        i.scale()
-    animateCounter = 0
-    gui.GUI.enable(hintGUI)
+# endAnimateEvent = pyg.event.custom_type()
+# def endAnimate():
+#     global animateCounter
+#     for i in animateFrames:
+#         i.points = []
+#         i.scale()
+#     animateCounter = 0
+#     gui.GUI.enable(hintGUI)
 
 # -------------------- Animation Variables --------------------
 # TODO: make sure to change the amount of animation frames when new prompt is selected
-animateFrames = []
-for i in range(len(kanji.pBzPoints)):
-    animateFrames.append(Stroke(drawGUI))
-    animateFrames[-1].color = "gray"
-animateCounter = 0
+# animateFrames = []
+# for i in range(len(kanji.pBzPoints)):
+#     animateFrames.append(Stroke(drawGUI))
+#     animateFrames[-1].color = "gray"
+# animateCounter = 0
 
 # -------------------- Main Loop --------------------
-# where does this go???
-redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 pyg.display.quit()
 running = False
 
 def cardNote(card):
-    print(mw.state)
-    for i in card.note().fields[0]:
-        print(ord(i))
+    pass
+    pyg.display.init()
+    gui.initDisplay((300, 300), "Kanji Writing Practice")
 
-def kanjiWritingPractice(a):
+    Deck.newCard(card.note().fields[0])
+    print(f"kanji: {Deck.kanji}, str: {Deck.kanji.str}")
+    if Deck.kanji == "N/A":
+        gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
+        promptGUI.write("N/A")
+        accuracyGUI.write("--%")
+
+        pyg.display.quit()
+        return
+    Animate.newAnimation(Deck.kanji)
+    promptGUI.write(Deck.kanji.str)
+    accuracyGUI.write("--%")
+
+    pyg.display.quit()
+    
+
+def kanjiWritingPractice_bg(a):
     global mouse_pos, running
 
     if not hasattr(mw.reviewer, "state") or mw.state != "review" or running:
@@ -248,12 +332,12 @@ def kanjiWritingPractice(a):
             if event.type == pyg.QUIT:
                 running = False
             elif event.type == pyg.WINDOWRESIZED:
-                # TODO: find a replacement for kanjiDict.values() that actually works
-                gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), kanji)
+                # TODO: sometimes Deck.kanji will be a string "N/A", which DOES NOT HAVE A SCALE METHOD
+                gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
             elif event.type == animateEvent:
-                animate()
+                Animate.begin()
             elif event.type == endAnimateEvent:
-                endAnimate()
+                Animate.end()
             gui.GUI.interaction(event)
         gui.screen.fill("black")
 
@@ -264,9 +348,14 @@ def kanjiWritingPractice(a):
         pyg.display.flip()
         clock.tick(60)
     pyg.display.quit()
-    print("leaving")
 
-def terminateKWP():
+# code taken from the Anki development forums: https://forums.ankiweb.net/t/pygame-addon-has-trouble-switching-from-overview-to-review/62502/5
+# thank you!
+def kanjiWritingPractice(a):
+    t = Thread(target=kanjiWritingPractice_bg, args=(a,), daemon=True)
+    t.start()
+
+def terminateKWP(*args):
     global running
     running = False
 
@@ -276,4 +365,5 @@ def testFunc(a,b):
 gui_hooks.reviewer_did_show_question.append(cardNote)
 gui_hooks.state_did_change.append(testFunc)
 gui_hooks.reviewer_did_show_question.append(kanjiWritingPractice)
+gui_hooks.reviewer_did_show_answer.append(terminateKWP)
 gui_hooks.reviewer_will_end.append(terminateKWP)

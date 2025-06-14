@@ -182,7 +182,7 @@ class Bezier():
 
     def distInfoInit(self):
         # get the dist info across all bezier curves
-        # code taken from roblox blog given to me by issai (btw if they take down the blog, is it illegal for me to use it still?)
+        # code taken from roblox blog given to me by issai
         # thank you issai https://web.archive.org/web/20201115172941/https://developer.roblox.com/en-us/articles/Bezier-curves
         self.distInfo = {}
         total = 0
@@ -223,6 +223,7 @@ class Kanji():
     Class for breaking down written kanji into its individual strokes
     """
     def __init__(self, kanji: str, dimensions: tuple[int, int], strokeWidth: float):
+        self.str = kanji
         svgList = Kanji.deconstructKanji(kanji)[0]
         self.svgList = []
         for i in svgList:
