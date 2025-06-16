@@ -22,12 +22,19 @@ redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 
 class Deck():
     """
-    Processes the anki card
+    Processes the anki card, also has some gamestate attributes/methods
     """
+    # card attributes
     prompt = []
     kanjiDict = {"N/A" : "N/A"}
     counter = 0
     kanji: Union[svg.Kanji, str] = "N/A"
+
+    # gamestate attributes
+    x = 300
+    y = 300
+
+    active = False
 
     @classmethod
     def newCard(cls, question: str):
@@ -39,7 +46,7 @@ class Deck():
                 try:
                     cls.kanjiDict[c] = svg.Kanji(c, (175, 175), 8)
                 except FileNotFoundError:
-                    pass
+                    raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
                 except svg.SvgError:
                     raise svg.SvgError(f"An error occured while working with this kanji: {c}")
         if not cls.prompt:
@@ -64,6 +71,28 @@ class Deck():
     def reset(cls):
         cls.prompt = []
         cls.counter = 0
+
+    # gamestate methods
+    @staticmethod
+    def clearCanvas():
+        global testingKanjiMasks
+        Stroke.strokeGroup.empty()
+        drawGUI.strokes = []
+        gui.GUI.activeGUI.remove(testingKanjiMasks)
+        testingKanjiMasks = []
+
+
+    @classmethod
+    def newRound(cls):
+        cls.clearCanvas()
+
+        gui.GUI.activate(undoGUI, hintGUI, submitGUI)
+        gui.GUI.enable(drawGUI, hintGUI, submitGUI)
+        Animate.newAnimation(Deck.kanji)
+        promptGUI.write(Deck.kanji.str)
+        accuracyGUI.write("--%")
+
+        cls.active = True
 
 animateEvent = pyg.event.custom_type()
 endAnimateEvent = pyg.event.custom_type()
@@ -107,7 +136,8 @@ class Animate():
 
     @classmethod
     def end(cls):
-        if cls.isAnimating:
+        # TODO something wrong with the counter
+        if cls.isAnimating or not Deck.active:
             return
 
         for i in cls.frames:
@@ -228,6 +258,7 @@ testingKanjiMasks = []
 def submit(self:gui.GUI):
     global testingKanjiMasks
     Animate.tryEnd()
+    Deck.active = False
     gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
 
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
@@ -272,7 +303,7 @@ def continueClicked(self: gui.GUI):
     gui.GUI.enable(drawGUI, hintGUI, submitGUI)
 
     Deck.initKanji()
-    newRound()
+    Deck.newRound()
 
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
@@ -290,16 +321,17 @@ gui.GUI.disable(undoGUI)
 pyg.display.quit()
 running = False
 
-def newRound():
-    for i in range(len(drawGUI.strokes)):
-        Stroke.strokeGroup.remove(drawGUI.strokes.pop())
-    for i in range(len(testingKanjiMasks)):
-        gui.GUI.activeGUI.remove(gui.GUI.allGUI.pop())
+# def newRound():
+#     for i in drawGUI.strokes:
+#         Stroke.strokeGroup.remove(drawGUI.strokes.pop())
+#     print(drawGUI.strokes)
+#     for i in testingKanjiMasks:
+#         gui.GUI.activeGUI.remove(gui.GUI.allGUI.pop(gui.GUI.allGUI.index(i)))
     
-    gui.GUI.enable(drawGUI, hintGUI, submitGUI)
-    Animate.newAnimation(Deck.kanji)
-    promptGUI.write(Deck.kanji.str)
-    accuracyGUI.write("--%")
+#     gui.GUI.enable(drawGUI, hintGUI, submitGUI)
+#     Animate.newAnimation(Deck.kanji)
+#     promptGUI.write(Deck.kanji.str)
+#     accuracyGUI.write("--%")
 
 def cardNote(card):
     pyg.display.init()
@@ -307,18 +339,21 @@ def cardNote(card):
 
     Deck.reset()
     Deck.newCard(card.note().fields[0])
-    #print(f"kanji: {Deck.kanji}, str: {Deck.kanji.str}")
+    # REAL NICE HACK JOB
+    gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
+
     if Deck.kanji == "N/A":
+        Deck.clearCanvas()
+
+        gui.GUI.activate(undoGUI, hintGUI, submitGUI)
         gui.GUI.disable(drawGUI, hintGUI, submitGUI)
         promptGUI.write("N/A")
         accuracyGUI.write("--%")
 
         pyg.display.quit()
         return
-    newRound()
-    # Animate.newAnimation(Deck.kanji)
-    # promptGUI.write(Deck.kanji.str)
-    # accuracyGUI.write("--%")
+    
+    Deck.newRound()
 
     pyg.display.quit()
     
@@ -331,7 +366,6 @@ def kanjiWritingPractice_bg(a):
 
     pyg.display.init()
     gui.initDisplay((300, 300), "Kanji Writing Practice")
-    gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
     running = True
 
     while running:
@@ -367,11 +401,7 @@ def terminateKWP(*args):
     global running
     running = False
 
-def testFunc(a,b):
-    print(f"current state: {mw.state}")
-
 gui_hooks.reviewer_did_show_question.append(cardNote)
-gui_hooks.state_did_change.append(testFunc)
 gui_hooks.reviewer_did_show_question.append(kanjiWritingPractice)
 gui_hooks.reviewer_did_show_answer.append(terminateKWP)
 gui_hooks.reviewer_will_end.append(terminateKWP)
