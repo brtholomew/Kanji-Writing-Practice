@@ -5,6 +5,10 @@ from io import BytesIO
 from typing import Union
 from os import path
 
+class SvgError(Exception):
+    "An error occured while parsing data related to SVGs"
+    pass
+
 # -------------------- SVG Functions --------------------
 def listToFloat(list: list):
     return float("".join(list))
@@ -42,13 +46,17 @@ def extractPathParameter(svg: str):
         # temporary solution
         startIndex = svg.index(' d="')
     except ValueError:
-        raise ValueError(f"Could not find d parameter in: {svg}")
+        raise SvgError(f"Could not find d parameter in: {svg}")
     # start index begins at the first character after the quotation mark, end index is at the quotation mark that closes the d parameter
     startIndex = svg.index('"', startIndex) + 1
     endIndex = svg.index('"', startIndex)
     d = []
     # counter tracks if we're on an x or y coordinate; 0 = x, 1 = y
     counter = 0
+    # coordinate counter 
+    cCounter = 1
+
+    # this for loop might be the most horrid abombination i've ever created in my entire life
     for i in range(startIndex, endIndex):
         # link current command to a list of list of x and y coordinates
         # every x/y coordinate will be represented as a list
@@ -58,13 +66,21 @@ def extractPathParameter(svg: str):
             # create new x/y coordinate list
             counter = 0
             d[-1][currentCommand].append([])
+            cCounter = 1
         elif svg[i] not in (",", "-"):
             try:
                 d[-1][currentCommand][-1][counter].append(svg[i])
-            except IndexError:
-                # missing x/y coordinate list
+            except IndexError: # missing x/y coordinate list
                 d[-1][currentCommand][-1].append([svg[i]])
         else: # svg[i] is either a dash or comma
+            # if there's an empty x/y list and svg[i] is a dash
+            try:
+                if svg[i] == "-" and not d[-1][currentCommand][-1][-1]:
+                    d[-1][currentCommand][-1][-1].append(svg[i])
+                    continue
+            except IndexError: # missing x/y coordinate list
+                    d[-1][currentCommand][-1].append([svg[i]])
+                    continue
             # if a x/y coordinate is missing
             if len(d[-1][currentCommand][-1]) < 2:
                 # only move to the y coordinate if the x coordinate is there
@@ -73,7 +89,17 @@ def extractPathParameter(svg: str):
                 d[-1][currentCommand][-1].append(["-"] if svg[i] == "-" else [])
             else: # create new list of x/y coordinates
                 counter = 0
+                if cCounter == 3: # handles when a curveto command is given a multiple of 3 coordinates
+                    # NOTE: if something regarding svgs breaks, it's probably because i need to code functionality for this for EVERY command
+                    d.append({currentCommand: []})
+                    cCounter = 0
                 d[-1][currentCommand].append([["-"]] if svg[i] == "-" else [])
+                cCounter += 1
+    # real quick check if the svg has been processed properly
+    for i in d:
+        for k,v in i.items():
+            if k.upper() == "C" and not len(v) == 3:
+                raise SvgError(f"An error occured while processing this svg: {svg}")
     return d
 
 def extractPosition(svg: str, keyword: str, start: int = 0):
@@ -96,13 +122,11 @@ def extractPosition(svg: str, keyword: str, start: int = 0):
             endIndex += 1
     except ValueError:
         # svg file ends in a number somehow
-        raise ValueError("SVG file is invalid")
+        raise SvgError("SVG file is invalid")
     return (startIndex, endIndex)
 
 def extractValue(svg: str, keyword: str):
-    """
-    Returns the value associated to a specific keyword in an svg file
-    """
+    "Returns the value associated to a specific keyword in an svg file"
     startIndex, endIndex = extractPosition(svg, keyword)
     value = []
     for i in range(startIndex, endIndex):
@@ -147,9 +171,7 @@ def alterValue(svg: str, **kwargs):
 
 # -------------------- Bezier Class --------------------
 class Bezier():
-    """
-    Converts a svg into an object that contains a list of bezier curves
-    """
+    "Converts a svg into an object that contains a list of bezier curves"
     def __init__(self, svg: str):
         self.controlPoints = []
         finalPos = (0, 0)
@@ -172,7 +194,7 @@ class Bezier():
                     # final point becomes the initial point of the next curve
                     finalPos = self.controlPoints[-1][-1]
                 else:
-                    raise ValueError(f"Bezier class not built for processing this command: {k}")
+                    raise SvgError(f"Bezier class not built for processing this command: {k}")
         
         # build the equations for every bezier curve
         self.functions = []
@@ -238,7 +260,7 @@ class Kanji():
                 self.pBzPoints.append([])
                 for p in range(0, 50):
                     self.pBzPoints[-1].append(b.bezierPercent(p/49))
-        except ValueError:
+        except SvgError:
             self.pBzPoints = "N/A"
             print(f"This kanji doesn't have an animation: {self.str}, file: {Kanji.findKanji(self.str)}")
         
@@ -304,23 +326,17 @@ if __name__ == "__main__":
 
     gui.initDisplay((300, 300))  
 
-    testKanji = Kanji("食", (109, 109), 8)
-    # TODO: cannot change color of svg with altervalue
-    testKanji.svgList = [alterValue(i, stroke = "#0000FF") for i in testKanji.svgList]
-    #print(testKanji.svgList)
+#     print(extractPathParameter("""<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
+# <g id="kvg:StrokePaths_06163" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+# 	<path id="kvg:06163-s4" kvg:type="㇛" d="m51.6,15.24c0.83,0.83,1.14,2.12,1.02,3.3-0.74,7.34-1.75,14.09-3.1,18.7-0.5,1.69,0.19,2.75,1.57,2.46,8.11,-1.7,15.02,-2.59,24.42,-3.15,2.09,-0.13,4.3,-0.23,6.68,-0.33"/>
+# </g>
+# </svg>"""))
+    testKanji = Kanji("慣", (109, 109), 8)
     blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
-
-    testSVG = """<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
-    <g id="kvg:StrokePaths_098df" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
-        <path id="kvg:098df-s1" kvg:type="㇒" d="M52.75,10.5c0.11,0.98-0.19,2.67-0.97,3.93C45,25.34,31.75,41.19,14,51.5"/>
-    </g>
-    </svg>"""
-
-    test = Bezier(alterValue(testSVG, width = 300, height = 300, **{"stroke-width" : 1}, viewBox = f"0 0 {300} {300}"))
+    # TODO: cannot change color of svg with altervalue
 
     # pygame
 
-    scale = 1
     running = True
 
     while running:
@@ -328,15 +344,8 @@ if __name__ == "__main__":
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
                 running = False
-            if event.type == pyg.KEYUP:
-                if event.key == pyg.K_a:
-                    scale -= 0.1
-                elif event.key == pyg.K_d:
-                    scale += 0.1
             if event.type == pyg.WINDOWRESIZED:
-                gui.scaleDisplay(event, *gui.GUI.allGUI, testKanji)
-        blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
-        #kanji.scale(scale)
+                gui.scaleDisplay(event, *gui.GUI.allGUI)
         gui.screen.fill("white")
         pyg.Surface.blits(gui.screen, blitSequence)
         gui.GUI.activeGUI.draw(gui.screen)

@@ -34,31 +34,31 @@ class Deck():
         cls.reset()
         for c in question:
             # code taken from Kanji Colorizer: https://github.com/cayennes/kanji-colorize/blob/main/anki/kanji_colorizer.py
-            print(ord(c) >= 19968 and ord(c) <= 40879)
             if ord(c) >= 19968 and ord(c) <= 40879:
                 cls.prompt.append(c)
                 try:
                     cls.kanjiDict[c] = svg.Kanji(c, (175, 175), 8)
                 except FileNotFoundError:
                     pass
+                except svg.SvgError:
+                    raise svg.SvgError(f"An error occured while working with this kanji: {c}")
         if not cls.prompt:
             cls.prompt.append("N/A")
             cls.kanji = "N/A"
             return
-        try:
-            cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
-        except KeyError:
-            cls.kanji = f"N/A ({cls.prompt[cls.counter]})"
+        cls.initKanji()
 
     @classmethod
     def shouldEnd(cls):
         cls.counter += 1
-        return cls.counter > len(cls.prompt)
+        return cls.counter >= len(cls.prompt)
 
     @classmethod
-    def next(cls):
-        cls.counter += 1
-        cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
+    def initKanji(cls):
+        try:
+            cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
+        except KeyError:
+            cls.kanji = f"N/A ({cls.prompt[cls.counter]})"
     
     @classmethod
     def reset(cls):
@@ -224,7 +224,9 @@ def hintAnimate(self:gui.GUI):
     gui.GUI.disable(self)
 
 # submitGUI events
+testingKanjiMasks = []
 def submit(self:gui.GUI):
+    global testingKanjiMasks
     Animate.tryEnd()
     gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
 
@@ -259,10 +261,7 @@ def submit(self:gui.GUI):
     redGreen = redYellowGreenBezier.functions[0](score)
     accuracyGUI.write(f"{int(score*100)}%", (redGreen[0], redGreen[1], 0))
 
-    if Deck.shouldEnd():
-        # blah blah reset everything for the next card
-        pass
-    else:
+    if not Deck.shouldEnd():
         gui.GUI.deactivate(undoGUI, hintGUI, submitGUI)
         gui.GUI.activate(continueGUI)
 
@@ -270,9 +269,10 @@ def submit(self:gui.GUI):
 def continueClicked(self: gui.GUI):
     gui.GUI.deactivate(continueGUI)
     gui.GUI.activate(undoGUI, hintGUI, submitGUI)
-    gui.GUI.enable(hintGUI, submitGUI)
+    gui.GUI.enable(drawGUI, hintGUI, submitGUI)
 
-
+    Deck.initKanji()
+    newRound()
 
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
@@ -282,7 +282,7 @@ hintGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "hin
 submitGUI = gui.GUI((215, 275), (30, 30), image = gui.Spritesheet((500, 500), "submitgui.png"), freed = submit)
 promptGUI = gui.GUI((150, 30), (30, 30), image = "grid.png")
 continueGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "continuegui.png"), freed = continueClicked)
-accuracyGUI = gui.GUI((215, 30), (60, 30))
+accuracyGUI = gui.GUI((215, 30), (60, 30), image = "accuracygui.png")
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
 gui.GUI.disable(undoGUI)
 
@@ -290,12 +290,24 @@ gui.GUI.disable(undoGUI)
 pyg.display.quit()
 running = False
 
+def newRound():
+    for i in range(len(drawGUI.strokes)):
+        Stroke.strokeGroup.remove(drawGUI.strokes.pop())
+    for i in range(len(testingKanjiMasks)):
+        gui.GUI.activeGUI.remove(gui.GUI.allGUI.pop())
+    
+    gui.GUI.enable(drawGUI, hintGUI, submitGUI)
+    Animate.newAnimation(Deck.kanji)
+    promptGUI.write(Deck.kanji.str)
+    accuracyGUI.write("--%")
+
 def cardNote(card):
     pyg.display.init()
     gui.initDisplay((300, 300), "Kanji Writing Practice")
 
+    Deck.reset()
     Deck.newCard(card.note().fields[0])
-    print(f"kanji: {Deck.kanji}, str: {Deck.kanji.str}")
+    #print(f"kanji: {Deck.kanji}, str: {Deck.kanji.str}")
     if Deck.kanji == "N/A":
         gui.GUI.disable(drawGUI, hintGUI, submitGUI)
         promptGUI.write("N/A")
@@ -303,9 +315,10 @@ def cardNote(card):
 
         pyg.display.quit()
         return
-    Animate.newAnimation(Deck.kanji)
-    promptGUI.write(Deck.kanji.str)
-    accuracyGUI.write("--%")
+    newRound()
+    # Animate.newAnimation(Deck.kanji)
+    # promptGUI.write(Deck.kanji.str)
+    # accuracyGUI.write("--%")
 
     pyg.display.quit()
     
@@ -314,12 +327,11 @@ def kanjiWritingPractice_bg(a):
     global mouse_pos, running
 
     if not hasattr(mw.reviewer, "state") or mw.state != "review" or running:
-        print("returning")
         return
-    print("proceeding")
 
     pyg.display.init()
     gui.initDisplay((300, 300), "Kanji Writing Practice")
+    gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
     running = True
 
     while running:
