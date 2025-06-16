@@ -105,7 +105,7 @@ class GUI(pyg.sprite.Sprite):
     activeGUI = pyg.sprite.Group()
     allGUI = []
 
-    def __init__(self, pos: tuple[int, int], dimensions: tuple[int, int], image: Union[str, pyg.surface.Surface, Spritesheet] = assetPath("placeholder.png"), pressed:  Callable[["GUI"], None] = lambda x: print(f"{x} was clicked!"), freed: Callable[["GUI"], None] = lambda x: print(f"{x} was released!"), heave: Callable[["GUI"], None] = lambda x: print(f"{x} is being dragged!"), active: Callable[["GUI"], None] = lambda x: None):
+    def __init__(self, pos: tuple[int, int], dimensions: tuple[int, int], image: Union[str, pyg.surface.Surface, Spritesheet] = assetPath("placeholder.png"), pressed:  Callable[["GUI"], None] = lambda x: None, freed: Callable[["GUI"], None] = lambda x: None, heave: Callable[["GUI"], None] = lambda x: None, active: Callable[["GUI"], None] = lambda x: None):
         super().__init__()
         self.pos: tuple[int, int] = pos
         self.dimensions: tuple[int, int] = dimensions
@@ -174,6 +174,11 @@ class GUI(pyg.sprite.Sprite):
             i.changeState(2)
 
     def changeState(self, newState: int):
+        """
+        0: default\n
+        1: being held down\n
+        2: disabled\n
+        """
         if not isinstance(self.ogimage, Spritesheet):
             return
         self.ogimage.state = newState
@@ -191,7 +196,6 @@ class GUI(pyg.sprite.Sprite):
         GUI.allGUI.remove(guiText)
         self.fontInfo = {"gui" : guiText, "text" : text, "color" : color}
 
-    # maybe ill add functionality for buttons physically going down, sound effects, etc
     def clicked(self):
         if self.enabled:
             self.dragging = True

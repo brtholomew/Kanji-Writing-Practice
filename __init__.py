@@ -45,7 +45,15 @@ class Deck():
             cls.prompt.append("N/A")
             cls.kanji = "N/A"
             return
-        cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
+        try:
+            cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
+        except KeyError:
+            cls.kanji = f"N/A ({cls.prompt[cls.counter]})"
+
+    @classmethod
+    def shouldEnd(cls):
+        cls.counter += 1
+        return cls.counter > len(cls.prompt)
 
     @classmethod
     def next(cls):
@@ -65,15 +73,25 @@ class Animate():
     """
     frames = []
     counter = 0
+    endNow = False
+    isAnimating = False
 
     @classmethod
     def newAnimation(cls, kanji: svg.Kanji):
+        if kanji.pBzPoints == "N/A": # bezier class was not coded to handle a specific command
+            gui.GUI.disable(hintGUI)
+            hintGUI.changeState(3)
+            return
+
+        cls.frames = []
         for i in range(len(kanji.pBzPoints)):
             cls.frames.append(Stroke(drawGUI))
             cls.frames[-1].color = "gray"
 
     @classmethod
     def begin(cls):
+        if cls.endNow:
+            return
         # draw every stroke from the prompt pBzPoints list
         index = int(cls.counter/len(Deck.kanji.pBzPoints[0]))
         point = cls.counter%len(Deck.kanji.pBzPoints[0])
@@ -82,18 +100,29 @@ class Animate():
 
         cls.counter += 1
         if int(cls.counter/len(Deck.kanji.pBzPoints[0])) == len(Deck.kanji.pBzPoints):
+            cls.isAnimating = False
             pyg.time.set_timer(endAnimateEvent, 2500, 1)
         else:
             pyg.time.set_timer(animateEvent, 1, 1)
 
     @classmethod
     def end(cls):
+        if cls.isAnimating:
+            return
+
         for i in cls.frames:
             i.points = []
-            # TODO: is this necessary?
+            # yes this is necessary
             i.scale()
         cls.counter = 0
         gui.GUI.enable(hintGUI)
+
+    @classmethod
+    def tryEnd(cls):
+        cls.endNow = cls.isAnimating
+        cls.isAnimating = False
+        cls.end()
+
 
 class Stroke(pyg.sprite.Sprite):
     """
@@ -150,7 +179,7 @@ class Stroke(pyg.sprite.Sprite):
 
 # -------------------- GUI Events --------------------
 # drawGUI events
-def drawInit(self:gui):
+def drawInit(self:gui.GUI):
     # create a new frame
     global translationX, translationY
     self.strokes.append(Stroke(drawGUI))
@@ -162,41 +191,46 @@ def drawInit(self:gui):
     self.strokes[-1].initPos = finalPos
     self.strokes[-1].draw(finalPos)
 
-def drawDrag(self:gui):
+def drawDrag(self:gui.GUI):
     # draw circles on that frame
     finalPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
 
     self.strokes[-1].draw(finalPos)
 
-def drawPointsCheck(self:gui):
-    pass
+def drawPointsCheck(self:gui.GUI):
+    gui.GUI.enable(undoGUI)
     #print(len(Stroke.strokeGroup))
     #print(self.strokes[-1].points)
 
-def drawCheck(self:gui):
+def drawCheck(self:gui.GUI):
     # my terrible solution to a mild problem
     if not self.hovering and self.dragging:
         self.strokes[-1].initPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
 
 #undoGUI events
-def undoStroke(self:gui):
+def undoStroke(self:gui.GUI):
     if drawGUI.strokes:
         stroke = drawGUI.strokes.pop()
         Stroke.strokeGroup.remove(stroke)
+        # TODO: is this line necessary?
         stroke.points.pop()
+        if not drawGUI.strokes:
+            gui.GUI.disable(self)
 
 # hintGUI events
-def hintAnimate(self:gui):
+def hintAnimate(self:gui.GUI):
+    Animate.isAnimating = True
     pyg.time.set_timer(animateEvent, 10, 0)
     gui.GUI.disable(self)
 
 # submitGUI events
-def submit(self:gui):
+def submit(self:gui.GUI):
+    Animate.tryEnd()
     gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
 
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
     #strokeMasks = [pyg.mask.from_surface(i.image) for i in animateFrames]
-    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))) for i in Deck.kanji.svgList]
+    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))[0]) for i in Deck.kanji.svgList]
     kanjiMasks = [pyg.mask.from_surface(i.image) for i in testingKanjiMasks]
     scores = []
     for i in range(len(strokeMasks)):
@@ -225,32 +259,45 @@ def submit(self:gui):
     redGreen = redYellowGreenBezier.functions[0](score)
     accuracyGUI.write(f"{int(score*100)}%", (redGreen[0], redGreen[1], 0))
 
-def newKanjiInit():
-    pass
+    if Deck.shouldEnd():
+        # blah blah reset everything for the next card
+        pass
+    else:
+        gui.GUI.deactivate(undoGUI, hintGUI, submitGUI)
+        gui.GUI.activate(continueGUI)
+
+# continueGUI events
+def continueClicked(self: gui.GUI):
+    gui.GUI.deactivate(continueGUI)
+    gui.GUI.activate(undoGUI, hintGUI, submitGUI)
+    gui.GUI.enable(hintGUI, submitGUI)
+
+
 
 # -------------------- GUI Initializing --------------------
-drawGUI = gui.GUI((150, 150), (175, 175), image = gui.assetPath("grid.png"), pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
+drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
 drawGUI.strokes = []
-undoGUI = gui.GUI((85, 275), (40, 30), image = gui.Spritesheet((500, 500), "undogui.png"), freed = undoStroke)
+undoGUI = gui.GUI((85, 275), (30, 30), image = gui.Spritesheet((500, 500), "undogui.png"), freed = undoStroke)
 hintGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "hintgui.png"), freed = hintAnimate)
-submitGUI = gui.GUI((215, 275), (40, 30), image = gui.Spritesheet((500, 500), "submitgui.png") , freed = submit)
-promptGUI = gui.GUI((150, 30), (30, 30), image = gui.assetPath("grid.png"))
+submitGUI = gui.GUI((215, 275), (30, 30), image = gui.Spritesheet((500, 500), "submitgui.png"), freed = submit)
+promptGUI = gui.GUI((150, 30), (30, 30), image = "grid.png")
+continueGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "continuegui.png"), freed = continueClicked)
 accuracyGUI = gui.GUI((215, 30), (60, 30))
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
+gui.GUI.disable(undoGUI)
 
 # -------------------- Main Loop --------------------
 pyg.display.quit()
 running = False
 
 def cardNote(card):
-    pass
     pyg.display.init()
     gui.initDisplay((300, 300), "Kanji Writing Practice")
 
     Deck.newCard(card.note().fields[0])
     print(f"kanji: {Deck.kanji}, str: {Deck.kanji.str}")
     if Deck.kanji == "N/A":
-        gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
+        gui.GUI.disable(drawGUI, hintGUI, submitGUI)
         promptGUI.write("N/A")
         accuracyGUI.write("--%")
 
@@ -282,7 +329,6 @@ def kanjiWritingPractice_bg(a):
             if event.type == pyg.QUIT:
                 running = False
             elif event.type == pyg.WINDOWRESIZED:
-                # TODO: sometimes Deck.kanji will be a string "N/A", which DOES NOT HAVE A SCALE METHOD
                 gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
             elif event.type == animateEvent:
                 Animate.begin()

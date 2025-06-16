@@ -233,10 +233,14 @@ class Kanji():
 
         # linearly interpolated points for every stroke in this list
         self.pBzPoints = []
-        for b in [Bezier(i) for i in self.svgList]:
-            self.pBzPoints.append([])
-            for p in range(0, 50):
-                self.pBzPoints[-1].append(b.bezierPercent(p/49))
+        try:
+            for b in [Bezier(i) for i in self.svgList]:
+                self.pBzPoints.append([])
+                for p in range(0, 50):
+                    self.pBzPoints[-1].append(b.bezierPercent(p/49))
+        except ValueError:
+            self.pBzPoints = "N/A"
+            print(f"This kanji doesn't have an animation: {self.str}, file: {Kanji.findKanji(self.str)}")
         
         self.surfList = Kanji.svgTextToSurf(*self.svgList)
         self.maskList = [pyg.mask.from_surface(i) for i in self.surfList]
@@ -277,14 +281,14 @@ class Kanji():
     @staticmethod
     def svgTextToSurf(*args):
         """
-        Converts an svg in text format to a pygame surface
+        Converts an svg in text format to a list of pygame surfaces
         """
         IOList = []
         for i in args:
             # code taken from https://python-forum.io/thread-40976.html
             # i don't really get it but basically it turns a string into bytes, which is then turned into a filelike object, which can be read by pygame's image loader
             IOList.append(pyg.image.load(BytesIO(bytes(i, encoding = "utf-8"))).convert_alpha())
-        return IOList if len(IOList) > 1 else IOList[0]
+        return [pyg.image.load(BytesIO(bytes(i, encoding = "utf-8"))).convert_alpha() for i in args]
     
     def scale(self):
         # newSvgList = []
