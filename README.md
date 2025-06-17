@@ -22,6 +22,7 @@ Notably:
 - The submit button grades the stroke order and balance of every stroke drawn, and compiles it into a final percent (%) grade. The individual grade of every stroke is indicated on a red-yellow-green gradient. (red - lowest, green - highest)
 - If the stroke order is incorrect, or a stroke is completely wrong, it will be colored blue, which represents a 0%
 
+# Acknowledgements
 Data for kanji retrieved from KanjiVG
 
 https://kanjivg.tagaini.net
