@@ -17,6 +17,7 @@ There are three buttons:
 Notably:
 - The hint button shows the stroke order and balance of the current kanji
 - Some kanji do NOT have a hint animation. This is indicated by the hint button being crossed out by a red X. The program will function as intended, but you cannot view a hint for that kanji.
+
 - The submit button grades the stroke order and balance of every stroke drawn, and compiles it into a final percent (%) grade. The individual grade of every stroke is indicated on a red-yellow-green gradient. (red - lowest, green - highest)
 - If the stroke order is incorrect, or a stroke is completely wrong, it will be colored blue, which represents a 0%
 
