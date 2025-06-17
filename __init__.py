@@ -111,6 +111,9 @@ class Animate():
             gui.GUI.disable(hintGUI)
             hintGUI.changeState(3)
             return
+        
+        cls.counter = 0
+        cls.endNow = False
 
         colors = ("red", "orange", "yellow", "green", "blue", "purple")
         counter = 0
@@ -145,7 +148,6 @@ class Animate():
 
         for i in cls.frames:
             i.points = []
-            # yes this is necessary
             i.scale()
         cls.counter = 0
         gui.GUI.enable(hintGUI)
@@ -185,9 +187,10 @@ class Stroke(pyg.sprite.Sprite):
         """
         Draws a line on the frame\n
         """
-        self.points.append([finalPos[0]/gui.scale, finalPos[1]/gui.scale])
-        pyg.draw.circle(self.image, self.color, finalPos, Stroke.width/2)
-        pyg.draw.line(self.image, self.color, self.initPos, finalPos, int(Stroke.width))
+        #self.points.append([finalPos[0]/gui.scale, finalPos[1]/gui.scale])
+        self.points.append([i/gui.scale for i in finalPos])
+        pyg.draw.circle(self.image, self.color, finalPos, Stroke.width*gui.scale/2)
+        pyg.draw.line(self.image, self.color, self.initPos, finalPos, int(Stroke.width*gui.scale))
         self.initPos = finalPos
 
     def scale(self):
@@ -195,8 +198,8 @@ class Stroke(pyg.sprite.Sprite):
         Redraws the frame with the correct scaling
         """
         
-        Stroke.width = 8*gui.scale
         # reset the frame
+        alpha = self.image.get_alpha()
         self.image = pyg.transform.scale(Stroke.frame, self.rect.size)
 
         if not self.points:
@@ -209,6 +212,7 @@ class Stroke(pyg.sprite.Sprite):
 
         for i in temp:
             self.draw((i[0]*gui.scale, i[1]*gui.scale))
+        self.image.set_alpha(alpha)
 
 # -------------------- GUI Events --------------------
 # drawGUI events
@@ -223,6 +227,7 @@ def drawInit(self:gui.GUI):
 
     self.strokes[-1].initPos = finalPos
     self.strokes[-1].draw(finalPos)
+    gui.GUI.enable(undoGUI)
 
 def drawDrag(self:gui.GUI):
     # draw circles on that frame
@@ -245,8 +250,6 @@ def undoStroke(self:gui.GUI):
     if drawGUI.strokes:
         stroke = drawGUI.strokes.pop()
         Stroke.strokeGroup.remove(stroke)
-        # TODO: is this line necessary?
-        #stroke.points.pop()
         if not drawGUI.strokes:
             gui.GUI.disable(self)
 
@@ -265,7 +268,6 @@ def submit(self:gui.GUI):
     gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
 
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
-    #strokeMasks = [pyg.mask.from_surface(i.image) for i in animateFrames]
     testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))[0]) for i in Deck.kanji.svgList]
     kanjiMasks = [pyg.mask.from_surface(i.image) for i in testingKanjiMasks]
     scores = []
@@ -277,8 +279,6 @@ def submit(self:gui.GUI):
             redGreen = redYellowGreenBezier.functions[0](grade)
             pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
             pyg.pixelarray.PixelArray(testingKanjiMasks[i].image).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
-            # testingKanjiMasks[i].ogimage.set_alpha(127)
-            # testingKanjiMasks[i].image.set_alpha(127)
             gui.GUI.trueTransform(testingKanjiMasks[i], "set_alpha", 127)
         except IndexError:
             scores.append(0)
@@ -288,8 +288,6 @@ def submit(self:gui.GUI):
             scores.append(0)
             pyg.pixelarray.PixelArray(testingKanjiMasks[-i].ogimage).replace((0, 0, 0), (0, 0, 255))
             pyg.pixelarray.PixelArray(testingKanjiMasks[-i].image).replace((0, 0, 0), (0, 0, 255))
-            # testingKanjiMasks[-i].ogimage.set_alpha(127)
-            # testingKanjiMasks[-i].image.set_alpha(127)
             gui.GUI.trueTransform(testingKanjiMasks[-i], "set_alpha", 127)
     
     gui.GUI.activate(*testingKanjiMasks)
@@ -305,14 +303,12 @@ def submit(self:gui.GUI):
 # continueGUI events
 def continueClicked(self: gui.GUI):
     gui.GUI.deactivate(continueGUI)
-    gui.GUI.activate(undoGUI, hintGUI, submitGUI)
-    gui.GUI.enable(drawGUI, hintGUI, submitGUI)
 
     Deck.initKanji()
     Deck.newRound()
 
 # -------------------- GUI Initializing --------------------
-drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, freed = drawPointsCheck, heave = drawDrag, active = drawCheck)
+drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, heave = drawDrag, active = drawCheck)
 drawGUI.strokes = []
 undoGUI = gui.GUI((85, 275), (30, 30), image = gui.Spritesheet((500, 500), "undogui.png"), freed = undoStroke)
 hintGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "hintgui.png"), freed = hintAnimate)

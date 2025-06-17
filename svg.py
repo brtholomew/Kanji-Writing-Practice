@@ -47,7 +47,6 @@ def extractPathParameter(svg: str):
         startIndex = svg.index(' d="')
     except ValueError:
         raise SvgError(f"Could not find d parameter in: {svg}")
-    # start index begins at the first character after the quotation mark, end index is at the quotation mark that closes the d parameter
     startIndex = svg.index('"', startIndex) + 1
     endIndex = svg.index('"', startIndex)
     d = []
@@ -109,7 +108,6 @@ def extractPosition(svg: str, keyword: str, start: int = 0):
     """
     startIndex = svg.index(keyword, start)
 
-    # SURELY THERE'S A BETTER WAY OF DOING THIS???
     try:
         while svg[startIndex] not in ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", " "):
             startIndex += 1
@@ -122,7 +120,7 @@ def extractPosition(svg: str, keyword: str, start: int = 0):
             endIndex += 1
     except ValueError:
         # svg file ends in a number somehow
-        raise SvgError("SVG file is invalid")
+        raise SvgError(f"This SVG file is invalid: {svg}")
     return (startIndex, endIndex)
 
 def extractValue(svg: str, keyword: str):
@@ -159,13 +157,11 @@ def alterValue(svg: str, **kwargs):
                     temp = list(temp)
                     del temp[-1]
                     temp = "".join(temp)
-            # ONCE AGAIN CURSE YOU SVG FILES
             temp = temp.replace(",-", "-")
 
             startIndex = svg.index('"', svg.index(' d="')) + 1
             endIndex = svg.index('"', startIndex)
             svg = replaceSubstring(svg, temp, (startIndex, endIndex))[0]
-            #print(f"extracted d parameter: {temp}")
             
     return svg
 
@@ -175,7 +171,7 @@ class Bezier():
     def __init__(self, svg: str):
         self.controlPoints = []
         finalPos = (0, 0)
-        # extract the control points for every bezier curve 
+
         for i in extractPathParameter(svg):
             for k, v in i.items():
                 if k.upper() == "M":
@@ -255,11 +251,12 @@ class Kanji():
 
         # linearly interpolated points for every stroke in this list
         self.pBzPoints = []
+        points = 50
         try:
             for b in [Bezier(i) for i in self.svgList]:
                 self.pBzPoints.append([])
-                for p in range(0, 50):
-                    self.pBzPoints[-1].append(b.bezierPercent(p/49))
+                for p in range(0, points):
+                    self.pBzPoints[-1].append(b.bezierPercent(p/(points-1)))
         except SvgError:
             self.pBzPoints = "N/A"
             print(f"This kanji doesn't have an animation: {self.str}, file: {Kanji.findKanji(self.str)}")
@@ -313,9 +310,6 @@ class Kanji():
         return [pyg.image.load(BytesIO(bytes(i, encoding = "utf-8"))).convert_alpha() for i in args]
     
     def scale(self):
-        # newSvgList = []
-        # for i in self.svgList:
-        #     newSvgList.append(alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}"))
         self.surfList = Kanji.svgTextToSurf(*[alterValue(i, width = self.metadata["width"]*gui.scale, height = self.metadata["height"]*gui.scale, **{"stroke-width": self.metadata["strokeWidth"]*gui.scale}, viewBox = f"0 0 {self.metadata['width']*gui.scale} {self.metadata['height']*gui.scale}") for i in self.svgList])
         self.maskList = [pyg.mask.from_surface(i) for i in self.surfList]
 
