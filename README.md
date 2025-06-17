@@ -13,6 +13,7 @@ There are three buttons:
 - Undo
 - Hint
 - Submit
+
 Notably:
 - The hint button shows the stroke order and balance of the current kanji
 - Some kanji do NOT have a hint animation. This is indicated by the hint button being crossed out by a red X. The program will function as intended, but you cannot view a hint for that kanji.
