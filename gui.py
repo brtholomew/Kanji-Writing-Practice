@@ -8,10 +8,6 @@ pyg.init()
 def assetPath(file: str):
     return path.join(path.dirname(__file__), "assets", file)
 
-# def _scale(sprite: Union[pyg.sprite.Sprite, GUI]):
-#     sprite.image = pyg.transform.scale(sprite.ogimage if isinstance(sprite.ogimage, pyg.surface.Surface) else sprite.ogimage.returnState(), [i*scale for i in sprite.dimensions])
-#     sprite.rect = sprite.image.get_rect(center = (sprite.pos[0]*scaleX, sprite.pos[1]*scaleY))
-
 def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     """
     Initializes a display at the desired lowest possible size\n
@@ -51,8 +47,6 @@ def scaleDisplay(event, *args):
                 sprite.ogimage = sprite.image
                 sprite.pos = (sprite.rect.centerx/prevX, sprite.rect.centery/prevY)
                 sprite.dimensions = (sprite.rect.w/prev, sprite.rect.h/prev)
-            # sprite.image = pyg.transform.scale(sprite.ogimage, (sprite.dimensions[0]*scale, sprite.dimensions[1]*scale))
-            # sprite.rect = sprite.image.get_rect(center = (sprite.pos[0]*scaleX, sprite.pos[1]*scaleY))
             _scale(sprite)
             # im too lazy to code good text scaling so here's my terrible solution
             if hasattr(sprite, "fontInfo"):
@@ -118,8 +112,6 @@ class GUI(pyg.sprite.Sprite):
 
         else:
             raise TypeError("Invalid image type")
-        # self.image = pyg.transform.scale(self.ogimage, [i*scale for i in self.dimensions])
-        # self.rect = self.image.get_rect(center = (pos[0]*scaleX, pos[1]*scaleY))
         _scale(self)
 
         self.dragging = False
@@ -149,7 +141,7 @@ class GUI(pyg.sprite.Sprite):
             elif event.type == pyg.MOUSEBUTTONUP:
                     obj.dragging = False
                     # for buttons
-                    obj.changeState(0) if hasattr(obj, "ogimage") else None
+                    obj.changeState(0) if hasattr(obj, "ogimage") and obj.enabled else None
 
     @classmethod
     def activate(cls, *args):
@@ -172,6 +164,12 @@ class GUI(pyg.sprite.Sprite):
         for i in args:
             i.enabled = False
             i.changeState(2)
+
+    @staticmethod
+    def trueTransform(sprite: pyg.sprite.Sprite, method:str, *args):
+        getattr(sprite.image, method)(*args)
+        if hasattr(sprite, "ogimage"):
+            getattr(sprite.ogimage if isinstance(sprite.ogimage, pyg.surface.Surface) else sprite.ogimage.returnState(), method)(*args)
 
     def changeState(self, newState: int):
         """

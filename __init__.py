@@ -112,10 +112,13 @@ class Animate():
             hintGUI.changeState(3)
             return
 
+        colors = ("red", "orange", "yellow", "green", "blue", "purple")
+        counter = 0
         cls.frames = []
         for i in range(len(kanji.pBzPoints)):
             cls.frames.append(Stroke(drawGUI))
-            cls.frames[-1].color = "gray"
+            cls.frames[-1].color = colors[counter%6]
+            counter += 1
 
     @classmethod
     def begin(cls):
@@ -126,6 +129,7 @@ class Animate():
         point = cls.counter%len(Deck.kanji.pBzPoints[0])
         cls.frames[index].points.append(Deck.kanji.pBzPoints[index][point])
         cls.frames[index].scale()
+        gui.GUI.trueTransform(cls.frames[index], "set_alpha", 127)
 
         cls.counter += 1
         if int(cls.counter/len(Deck.kanji.pBzPoints[0])) == len(Deck.kanji.pBzPoints):
@@ -136,7 +140,6 @@ class Animate():
 
     @classmethod
     def end(cls):
-        # TODO something wrong with the counter
         if cls.isAnimating or not Deck.active:
             return
 
@@ -243,7 +246,7 @@ def undoStroke(self:gui.GUI):
         stroke = drawGUI.strokes.pop()
         Stroke.strokeGroup.remove(stroke)
         # TODO: is this line necessary?
-        stroke.points.pop()
+        #stroke.points.pop()
         if not drawGUI.strokes:
             gui.GUI.disable(self)
 
@@ -268,23 +271,26 @@ def submit(self:gui.GUI):
     scores = []
     for i in range(len(strokeMasks)):
         try:
+            gui.GUI.trueTransform(drawGUI.strokes[i], "set_alpha", 127)
             grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/max(Deck.kanji.maskList[i].count(), strokeMasks[i].count()), 1.0)
             scores.append(grade)
             redGreen = redYellowGreenBezier.functions[0](grade)
             pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
             pyg.pixelarray.PixelArray(testingKanjiMasks[i].image).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
-            testingKanjiMasks[i].ogimage.set_alpha(127)
-            testingKanjiMasks[i].image.set_alpha(127)
+            # testingKanjiMasks[i].ogimage.set_alpha(127)
+            # testingKanjiMasks[i].image.set_alpha(127)
+            gui.GUI.trueTransform(testingKanjiMasks[i], "set_alpha", 127)
         except IndexError:
             scores.append(0)
     
     if len(strokeMasks) < len(kanjiMasks):
-        for i in range(len(kanjiMasks)-len(strokeMasks)):
+        for i in range(1, len(kanjiMasks)-len(strokeMasks)+1):
             scores.append(0)
-            pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (0, 0, 255))
-            pyg.pixelarray.PixelArray(testingKanjiMasks[i].image).replace((0, 0, 0), (0, 0, 255))
-            testingKanjiMasks[i].ogimage.set_alpha(127)
-            testingKanjiMasks[i].image.set_alpha(127)
+            pyg.pixelarray.PixelArray(testingKanjiMasks[-i].ogimage).replace((0, 0, 0), (0, 0, 255))
+            pyg.pixelarray.PixelArray(testingKanjiMasks[-i].image).replace((0, 0, 0), (0, 0, 255))
+            # testingKanjiMasks[-i].ogimage.set_alpha(127)
+            # testingKanjiMasks[-i].image.set_alpha(127)
+            gui.GUI.trueTransform(testingKanjiMasks[-i], "set_alpha", 127)
     
     gui.GUI.activate(*testingKanjiMasks)
 
@@ -320,18 +326,6 @@ gui.GUI.disable(undoGUI)
 # -------------------- Main Loop --------------------
 pyg.display.quit()
 running = False
-
-# def newRound():
-#     for i in drawGUI.strokes:
-#         Stroke.strokeGroup.remove(drawGUI.strokes.pop())
-#     print(drawGUI.strokes)
-#     for i in testingKanjiMasks:
-#         gui.GUI.activeGUI.remove(gui.GUI.allGUI.pop(gui.GUI.allGUI.index(i)))
-    
-#     gui.GUI.enable(drawGUI, hintGUI, submitGUI)
-#     Animate.newAnimation(Deck.kanji)
-#     promptGUI.write(Deck.kanji.str)
-#     accuracyGUI.write("--%")
 
 def cardNote(card):
     pyg.display.init()
