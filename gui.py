@@ -52,6 +52,7 @@ def scaleDisplay(event, *args):
             if hasattr(sprite, "fontInfo"):
                 guiText = sprite.fontInfo["gui"]
                 guiText.image = pyg.font.SysFont("uddigikyokashonr", sprite.rect.h).render(sprite.fontInfo["text"], False, sprite.fontInfo["color"])
+                guiText.image.set_alpha(sprite.image.get_alpha())
                 guiText.rect = guiText.image.get_rect(center = sprite.rect.center)
         if hasattr(sprite, "scale") and callable(sprite.scale):
             sprite.scale()
@@ -103,13 +104,10 @@ class GUI(pyg.sprite.Sprite):
         super().__init__()
         self.pos: tuple[int, int] = pos
         self.dimensions: tuple[int, int] = dimensions
-        if isinstance(image, str):
+        if type(image) == str:
             self.ogimage = pyg.image.load(assetPath(image)).convert_alpha()
-        elif isinstance(image, pyg.surface.Surface):
+        elif type(image) == pyg.surface.Surface or type(image) == Spritesheet:
             self.ogimage = image
-        elif isinstance(image, Spritesheet):
-            self.ogimage = image
-
         else:
             raise TypeError("Invalid image type")
         _scale(self)
@@ -146,11 +144,17 @@ class GUI(pyg.sprite.Sprite):
     @classmethod
     def activate(cls, *args):
         cls.activeGUI.add(args)
+        for i in args:
+            if hasattr(i, "fontInfo"):
+                cls.activeGUI.add(i.fontInfo["gui"])
         return args
 
     @classmethod
     def deactivate(cls, *args):
         cls.activeGUI.remove(args)
+        for i in args:
+            if hasattr(i, "fontInfo"):
+                cls.activeGUI.remove(i.fontInfo["gui"])
         return args
 
     @staticmethod
@@ -186,10 +190,17 @@ class GUI(pyg.sprite.Sprite):
         GUI.deactivate(GUI.allGUI.pop(GUI.allGUI.index(self)))
 
     def write(self, text: str, color = "white"):
+        """
+        fontInfo = {\n
+            "gui" : gui:GUI,\n
+            "text" : str,\n
+            "color" : pyg.ColorValue\n
+        }
+        """
         if hasattr(self, "fontInfo"):
             GUI.deactivate(self.fontInfo["gui"])
         # im too lazy to code good text scaling so here's my terrible solution
-        guiText = GUI.activate(GUI(self.pos, self.dimensions, image = pyg.font.SysFont("uddigikyokashonr", self.rect.h).render(text, False, color)))[0]
+        guiText = GUI.activate(GUI(self.pos, self.dimensions, image = pyg.font.SysFont("uddigikyokashonr", self.rect.h).render(str(text), False, color)))[0]
         # i forgot so im leaving a note here but IM REMOVING guiText FROM THE ALL GUI LIST BECAUSE THAT'S HOW IT WILL SCALE PROPERLY
         GUI.allGUI.remove(guiText)
         self.fontInfo = {"gui" : guiText, "text" : text, "color" : color}
@@ -217,3 +228,28 @@ class GUI(pyg.sprite.Sprite):
 def _scale(sprite: Union[pyg.sprite.Sprite, GUI]):
     sprite.image = pyg.transform.scale(sprite.ogimage if isinstance(sprite.ogimage, pyg.surface.Surface) else sprite.ogimage.returnState(), [i*scale for i in sprite.dimensions])
     sprite.rect = sprite.image.get_rect(center = (sprite.pos[0]*scaleX, sprite.pos[1]*scaleY))
+
+if __name__ == "__main__":
+    # test rendering
+    initDisplay((300, 300))
+    promptGUI = GUI((150, 30), (30, 30), image = "grid.png")
+    promptGUI.write("test")
+    
+    running = True
+
+    while running:
+        mouse_pos = pyg.mouse.get_pos()
+
+        for event in pyg.event.get():
+            if event.type == pyg.QUIT:
+                running = False
+            elif event.type == pyg.WINDOWRESIZED:
+                scaleDisplay(event, *GUI.allGUI)
+            GUI.interaction(event)
+        screen.fill("black")
+
+        GUI.activeGUI.draw(screen)
+        GUI.activeGUI.update(mouse_pos)
+
+        pyg.display.flip()
+pyg.display.quit()

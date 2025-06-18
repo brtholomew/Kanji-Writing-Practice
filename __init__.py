@@ -10,6 +10,18 @@ import pygame as pyg
 import gui
 import svg
 from aqt import gui_hooks, mw
+from aqt.utils import ask_user
+
+config = mw.addonManager.getConfig(__name__)
+
+# check and correct invalid config values
+conSpeed = config["speed"]
+if "speed" in config and type(conSpeed) == int or type(conSpeed) == float:
+    config["speed"] = max(min(int(conSpeed), 100), 15)
+else:
+    config["speed"] = 65
+
+mw.addonManager.writeConfig(__name__, config)
 
 pyg.init()
 clock = pyg.time.Clock()
@@ -35,6 +47,7 @@ class Deck():
     y = 300
 
     active = False
+    enabled = False
 
     @classmethod
     def newCard(cls, question: str):
@@ -44,7 +57,7 @@ class Deck():
             if ord(c) >= 19968 and ord(c) <= 40879:
                 cls.prompt.append(c)
                 try:
-                    cls.kanjiDict[c] = svg.Kanji(c, (175, 175), 8)
+                    cls.kanjiDict[c] = svg.Kanji(c, (175, 175), 8, 100 - config["speed"] + 15)
                 except FileNotFoundError:
                     raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
                 except svg.SvgError:
@@ -78,7 +91,8 @@ class Deck():
         global testingKanjiMasks
         Stroke.strokeGroup.empty()
         drawGUI.strokes = []
-        gui.GUI.activeGUI.remove(testingKanjiMasks)
+        for i in testingKanjiMasks:
+            i.delete()
         testingKanjiMasks = []
 
 
@@ -86,6 +100,7 @@ class Deck():
     def newRound(cls):
         cls.clearCanvas()
 
+        gui.GUI.deactivate(continueGUI, oldAccuracyGUI)
         gui.GUI.activate(undoGUI, hintGUI, submitGUI)
         gui.GUI.enable(drawGUI, hintGUI, submitGUI)
         Animate.newAnimation(Deck.kanji)
@@ -93,6 +108,17 @@ class Deck():
         accuracyGUI.write("--%")
 
         cls.active = True
+
+    @classmethod
+    def shouldEnable(cls, shouldEnable):
+        # only should be called by ask_user
+        cls.enabled = shouldEnable
+        if cls.enabled:
+            prepKWP(mw.reviewer.card)
+            config["whitelist"].append(deckID)
+        else:
+            config["blacklist"].append(deckID)
+        mw.addonManager.writeConfig(__name__, config)
 
 animateEvent = pyg.event.custom_type()
 endAnimateEvent = pyg.event.custom_type()
@@ -102,8 +128,8 @@ class Animate():
     """
     frames = []
     counter = 0
-    endNow = False
-    isAnimating = False
+    endNow: bool = False
+    animatedKanji: str = None
 
     @classmethod
     def newAnimation(cls, kanji: svg.Kanji):
@@ -136,14 +162,14 @@ class Animate():
 
         cls.counter += 1
         if int(cls.counter/len(Deck.kanji.pBzPoints[0])) == len(Deck.kanji.pBzPoints):
-            cls.isAnimating = False
             pyg.time.set_timer(endAnimateEvent, 2500, 1)
         else:
             pyg.time.set_timer(animateEvent, 1, 1)
 
     @classmethod
     def end(cls):
-        if cls.isAnimating or not Deck.active:
+        #if cls.isAnimating or not Deck.active:
+        if Animate.animatedKanji != Deck.kanji.str or not Deck.active:
             return
 
         for i in cls.frames:
@@ -154,8 +180,7 @@ class Animate():
 
     @classmethod
     def tryEnd(cls):
-        cls.endNow = cls.isAnimating
-        cls.isAnimating = False
+        cls.endNow = True
         cls.end()
 
 
@@ -187,7 +212,6 @@ class Stroke(pyg.sprite.Sprite):
         """
         Draws a line on the frame\n
         """
-        #self.points.append([finalPos[0]/gui.scale, finalPos[1]/gui.scale])
         self.points.append([i/gui.scale for i in finalPos])
         pyg.draw.circle(self.image, self.color, finalPos, Stroke.width*gui.scale/2)
         pyg.draw.line(self.image, self.color, self.initPos, finalPos, int(Stroke.width*gui.scale))
@@ -255,7 +279,8 @@ def undoStroke(self:gui.GUI):
 
 # hintGUI events
 def hintAnimate(self:gui.GUI):
-    Animate.isAnimating = True
+    #Animate.isAnimating = True
+    Animate.animatedKanji = Deck.kanji.str
     pyg.time.set_timer(animateEvent, 10, 0)
     gui.GUI.disable(self)
 
@@ -296,14 +321,19 @@ def submit(self:gui.GUI):
     redGreen = redYellowGreenBezier.functions[0](score)
     accuracyGUI.write(f"{int(score*100)}%", (redGreen[0], redGreen[1], 0))
 
+    if Deck.kanji.str in config["kanjiScore"]:
+        gui.GUI.activate(oldAccuracyGUI)
+        oldAccuracyGUI.write(f"{int(config['kanjiScore'][Deck.kanji.str]*100)}%")
+        gui.GUI.trueTransform(oldAccuracyGUI.fontInfo["gui"], "set_alpha", 127)
+    config["kanjiScore"][Deck.kanji.str] = score
+    mw.addonManager.writeConfig(__name__, config)
+
     if not Deck.shouldEnd():
         gui.GUI.deactivate(undoGUI, hintGUI, submitGUI)
         gui.GUI.activate(continueGUI)
 
 # continueGUI events
 def continueClicked(self: gui.GUI):
-    gui.GUI.deactivate(continueGUI)
-
     Deck.initKanji()
     Deck.newRound()
 
@@ -316,6 +346,8 @@ submitGUI = gui.GUI((215, 275), (30, 30), image = gui.Spritesheet((500, 500), "s
 promptGUI = gui.GUI((150, 30), (30, 30), image = "grid.png")
 continueGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "continuegui.png"), freed = continueClicked)
 accuracyGUI = gui.GUI((215, 30), (60, 30), image = "accuracygui.png")
+oldAccuracyGUI = gui.GUI((85, 30), (60, 30), image = "accuracygui.png")
+gui.GUI.trueTransform(oldAccuracyGUI, "set_alpha", 127)
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
 gui.GUI.disable(undoGUI)
 
@@ -323,13 +355,23 @@ gui.GUI.disable(undoGUI)
 pyg.display.quit()
 running = False
 
-def cardNote(card):
+def enableKWP(card):
+    global deckID
+    deckID = mw.col.decks.current()["id"]
+    if not deckID in config["whitelist"] + config["blacklist"]:
+        ask_user("Would you like to enable Kanji Writing Practice for this deck?", callback = Deck.shouldEnable, defaults_yes = False)
+    else:
+        Deck.enabled = deckID in config["whitelist"]
+        
+    if Deck.enabled:
+        prepKWP(card)
+
+def prepKWP(card):
     pyg.display.init()
     gui.initDisplay((300, 300), "Kanji Writing Practice")
 
     Deck.reset()
     Deck.newCard(card.note().fields[0])
-    # REAL NICE HACK JOB
     gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
 
     if Deck.kanji == "N/A":
@@ -341,17 +383,19 @@ def cardNote(card):
         accuracyGUI.write("--%")
 
         pyg.display.quit()
+        kanjiWritingPractice()
         return
     
     Deck.newRound()
 
     pyg.display.quit()
-    
+    kanjiWritingPractice()
 
-def kanjiWritingPractice_bg(a):
+def kanjiWritingPractice_bg():
     global mouse_pos, running
 
-    if not hasattr(mw.reviewer, "state") or mw.state != "review" or running:
+    if running or not hasattr(mw.reviewer, "state") or mw.state != "review":
+        print("i feel like this if statement will never be called")
         return
 
     pyg.display.init()
@@ -383,16 +427,15 @@ def kanjiWritingPractice_bg(a):
 
 # code taken from the Anki development forums: https://forums.ankiweb.net/t/pygame-addon-has-trouble-switching-from-overview-to-review/62502/5
 # thank you!
-def kanjiWritingPractice(a):
-    t = Thread(target=kanjiWritingPractice_bg, args=(a,), daemon=True)
+def kanjiWritingPractice():
+    t = Thread(target=kanjiWritingPractice_bg, args=(), daemon=True)
     t.start()
 
 def terminateKWP(*args):
     global running
     running = False
 
-gui_hooks.reviewer_did_show_question.append(cardNote)
-gui_hooks.reviewer_did_show_question.append(kanjiWritingPractice)
+gui_hooks.reviewer_did_show_question.append(enableKWP)
 gui_hooks.reviewer_did_show_answer.append(terminateKWP)
 gui_hooks.reviewer_will_end.append(terminateKWP)
 gui_hooks.profile_will_close.append(terminateKWP)
