@@ -13,6 +13,10 @@ class SvgError(Exception):
 def listToFloat(list: list):
     return float("".join(list))
 
+def lolToCoords(list: list):
+    "List of lists where lists is a float broken into strings, converts to x/y coordinates"
+    return (listToFloat(list[0]), listToFloat(list[1]))
+
 def distanceFormula(p1: tuple[int, int], p2: tuple[int, int]):
     return ((p2[0]-p1[0])**2+(p2[1]-p1[1])**2)**0.5
 
@@ -27,6 +31,19 @@ def replaceSubstring(stri: str, newValue: Union[str, float], index: tuple):
         oldValue.append(stri.pop(index[0]))
     stri.insert(index[0], str(newValue))
     return "".join(stri), "".join(oldValue)
+
+def standardizePath(svg: str, startIndex: int, endIndex: int):
+    "Fixes any inconsistencies in the path parameter for extractPathParameter"
+    # hopefully i won't have to update this too often
+    temp = []
+    for i in range(startIndex, endIndex):
+        if not svg[i] == " ":
+            temp.append(svg[i])
+        else:
+            if svg[i-1].isnumeric() and svg[i+1].isnumeric():
+                temp.append(",")
+    return replaceSubstring(svg, "".join(temp), (startIndex, endIndex))[0]
+
 
 def extractPathParameter(svg: str):
     """
@@ -49,6 +66,9 @@ def extractPathParameter(svg: str):
         raise SvgError(f"Could not find d parameter in: {svg}")
     startIndex = svg.index('"', startIndex) + 1
     endIndex = svg.index('"', startIndex)
+    svg = standardizePath(svg, startIndex, endIndex)
+    endIndex = svg.index('"', startIndex) # im crying
+    print(svg)
     d = []
     # counter tracks if we're on an x or y coordinate; 0 = x, 1 = y
     counter = 0
@@ -176,18 +196,26 @@ class Bezier():
             for k, v in i.items():
                 if k.upper() == "M":
                     for c in v:
-                        x = listToFloat(c[0])
-                        y = listToFloat(c[1])
+                        x, y = lolToCoords(c)
                         # final point becomes the initial point of the next curve
                         finalPos = (x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y)
                 elif k.upper() == "C":
                     self.controlPoints.append([])
                     self.controlPoints[-1].append(finalPos)
                     for c in v:
-                        x = listToFloat(c[0])
-                        y = listToFloat(c[1])
+                        x, y = lolToCoords(c)
                         self.controlPoints[-1].append((x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y))
                     # final point becomes the initial point of the next curve
+                    finalPos = self.controlPoints[-1][-1]
+                elif k.upper() == "S":
+                    controlPoint = self.controlPoints[-1][-2]
+                    reflectedPoint = (2*finalPos[0]-controlPoint[0], 2*finalPos[1]-controlPoint[1])
+
+                    self.controlPoints.append([])
+                    self.controlPoints[-1].extend((finalPos, reflectedPoint))
+                    for c in v:
+                        x, y = lolToCoords(c)
+                        self.controlPoints[-1].append((x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y))
                     finalPos = self.controlPoints[-1][-1]
                 else:
                     raise SvgError(f"Bezier class not built for processing this command: {k}")
@@ -240,7 +268,7 @@ class Kanji():
     """
     Class for breaking down written kanji into its individual strokes
     """
-    def __init__(self, kanji: str, dimensions: tuple[int, int], strokeWidth: float):
+    def __init__(self, kanji: str, dimensions: tuple[int, int], strokeWidth: float, points: int = 50):
         self.str = kanji
         svgList = Kanji.deconstructKanji(kanji)[0]
         self.svgList = []
@@ -251,7 +279,7 @@ class Kanji():
 
         # linearly interpolated points for every stroke in this list
         self.pBzPoints = []
-        points = 50
+        
         try:
             for b in [Bezier(i) for i in self.svgList]:
                 self.pBzPoints.append([])
@@ -294,7 +322,6 @@ class Kanji():
             svgList.append(f"{svgTag}\n{brushInfo}\n\t{path}\n</g>\n</svg>")
 
         metadata = dict(width = extractValue(svgTag, "width"), height = extractValue(svgTag, "height"), strokeWidth = extractValue(brushInfo, "stroke-width"))
-        #print(metadata)
         return svgList, metadata
 
     @staticmethod
@@ -325,7 +352,8 @@ if __name__ == "__main__":
 # 	<path id="kvg:06163-s4" kvg:type="㇛" d="m51.6,15.24c0.83,0.83,1.14,2.12,1.02,3.3-0.74,7.34-1.75,14.09-3.1,18.7-0.5,1.69,0.19,2.75,1.57,2.46,8.11,-1.7,15.02,-2.59,24.42,-3.15,2.09,-0.13,4.3,-0.23,6.68,-0.33"/>
 # </g>
 # </svg>"""))
-    testKanji = Kanji("慣", (109, 109), 8)
+    testKanji = Kanji("離", (300, 300), 8)
+    #print(testKanji.pBzPoints)
     blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
     # TODO: cannot change color of svg with altervalue
 

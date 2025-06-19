@@ -57,10 +57,12 @@ class Deck():
             if ord(c) >= 19968 and ord(c) <= 40879:
                 cls.prompt.append(c)
                 try:
-                    cls.kanjiDict[c] = svg.Kanji(c, (175, 175), 8, 100 - config["speed"] + 15)
+                    cls.kanjiDict[c] = svg.Kanji(c, drawGUI.dimensions, Stroke.width, 100 - config["speed"] + 15)
                 except FileNotFoundError:
+                    pyg.display.quit()
                     raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
                 except svg.SvgError:
+                    pyg.display.quit()
                     raise svg.SvgError(f"An error occured while working with this kanji: {c}")
         if not cls.prompt:
             cls.prompt.append("N/A")
@@ -169,7 +171,7 @@ class Animate():
     @classmethod
     def end(cls):
         #if cls.isAnimating or not Deck.active:
-        if Animate.animatedKanji != Deck.kanji.str or not Deck.active:
+        if Animate.animatedKanji != Deck.kanji.str[Deck.counter] or not Deck.active:
             return
 
         for i in cls.frames:
@@ -280,7 +282,7 @@ def undoStroke(self:gui.GUI):
 # hintGUI events
 def hintAnimate(self:gui.GUI):
     #Animate.isAnimating = True
-    Animate.animatedKanji = Deck.kanji.str
+    Animate.animatedKanji = Deck.kanji.str[Deck.counter]
     pyg.time.set_timer(animateEvent, 10, 0)
     gui.GUI.disable(self)
 
@@ -377,6 +379,7 @@ def prepKWP(card):
     if Deck.kanji == "N/A":
         Deck.clearCanvas()
 
+        gui.GUI.disable(continueGUI, oldAccuracyGUI)
         gui.GUI.activate(undoGUI, hintGUI, submitGUI)
         gui.GUI.disable(drawGUI, hintGUI, submitGUI)
         promptGUI.write("N/A")
