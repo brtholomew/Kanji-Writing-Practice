@@ -68,7 +68,6 @@ def extractPathParameter(svg: str):
     endIndex = svg.index('"', startIndex)
     svg = standardizePath(svg, startIndex, endIndex)
     endIndex = svg.index('"', startIndex) # im crying
-    print(svg)
     d = []
     # counter tracks if we're on an x or y coordinate; 0 = x, 1 = y
     counter = 0
@@ -342,24 +341,54 @@ class Kanji():
 
 
 if __name__ == "__main__":
-    # test rendering
     pyg.init()
 
     gui.initDisplay((300, 300))  
+
+    # TEST EVERY SINGLE KANJI FILE
+    # from os import scandir
+    # import csv
+    # with scandir(path.join(path.dirname(__file__), "kanji")) as entries:
+    #     with open("kanji_csv_data.csv", mode = "w", newline = "") as csvFile:
+    #         csvWriter = csv.DictWriter(csvFile, fieldnames = ["Kanji", "did_load", "anim_did_load"])
+    #         csvWriter.writeheader()
+    #         for entry in entries:
+    #             if not entry.is_file():
+    #                 continue
+    #             fileName = path.splitext(path.basename(entry))[0]
+    #             kanjiStr = chr(int(fileName, 16))
+    #             if not ord(kanjiStr) >= 19968 and ord(kanjiStr) <= 40879:
+    #                 continue
+    #             try:
+    #                 kanji = Kanji(kanjiStr, (175, 175), 8)
+    #             except FileNotFoundError:
+    #                 print(f"Failed to load this file: {fileName}")
+    #                 continue
+    #             except SvgError:
+    #                 csvWriter.writerow({"Kanji": fileName, "did_load": False, "anim_did_load": False})
+    #                 continue
+    #             if kanji.pBzPoints == "N/A":
+    #                 csvWriter.writerow({"Kanji": fileName, "did_load": True, "anim_did_load": False})
+    #                 continue
+    #             else:
+    #                 csvWriter.writerow({"Kanji": fileName, "did_load": True, "anim_did_load": True})
+
+    # test rendering
 
 #     print(extractPathParameter("""<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
 # <g id="kvg:StrokePaths_06163" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
 # 	<path id="kvg:06163-s4" kvg:type="㇛" d="m51.6,15.24c0.83,0.83,1.14,2.12,1.02,3.3-0.74,7.34-1.75,14.09-3.1,18.7-0.5,1.69,0.19,2.75,1.57,2.46,8.11,-1.7,15.02,-2.59,24.42,-3.15,2.09,-0.13,4.3,-0.23,6.68,-0.33"/>
 # </g>
 # </svg>"""))
-    testKanji = Kanji("離", (300, 300), 8)
+    print(hex(ord("𠂊")))
+    testKanji = Kanji(chr(int("2008a", 16)), (300, 300), 8)
     #print(testKanji.pBzPoints)
     blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
     # TODO: cannot change color of svg with altervalue
 
     # pygame
 
-    running = True
+    running = False
 
     while running:
 
