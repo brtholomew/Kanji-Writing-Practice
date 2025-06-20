@@ -261,18 +261,19 @@ class Kanji():
     def __init__(self, kanji: str, dimensions: tuple[int, int], strokeWidth: float, points: int = 50):
         self.str = kanji
         svgList = Kanji.deconstructKanji(kanji)[0]
-        self.svgList = []
-        for i in svgList:
-            self.svgList.append(alterValue(i, width = dimensions[0], height = dimensions[1], **{"stroke-width" : strokeWidth}, viewBox = f"0 0 {dimensions[0]} {dimensions[1]}"))
+        self.svgList = [alterValue(i, width = dimensions[0], height = dimensions[1], **{"stroke-width" : strokeWidth}, viewBox = f"0 0 {dimensions[0]} {dimensions[1]}") for i in svgList]
 
-        self.metadata = dict(width = dimensions[0], height = dimensions[1], strokeWidth = strokeWidth)
-
+        #self.metadata = dict(width = dimensions[0], height = dimensions[1], strokeWidth = strokeWidth)
+        self.metadata = {"width": dimensions[0], "height": dimensions[1], "strokeWidth": strokeWidth}
+        
         self.pBzPoints = []
         try:
             for b in [Bezier(i) for i in self.svgList]:
                 self.pBzPoints.append([])
-                for p in range(0, points):
-                    self.pBzPoints[-1].append(b.bezierPercent(p/(points-1)))
+                b.distInfoInit()
+                newP = int((b.total/(dimensions[0]/2))*points)
+                for p in range(0, newP):
+                    self.pBzPoints[-1].append(b.bezierPercent(p/(newP-1)))
         except SvgError:
             self.pBzPoints = "N/A"
             print(f"This kanji doesn't have an animation: {self.str}, file: {Kanji.findKanji(self.str)}")
@@ -368,8 +369,8 @@ if __name__ == "__main__":
 # 	<path id="kvg:06163-s4" kvg:type="㇛" d="m51.6,15.24c0.83,0.83,1.14,2.12,1.02,3.3-0.74,7.34-1.75,14.09-3.1,18.7-0.5,1.69,0.19,2.75,1.57,2.46,8.11,-1.7,15.02,-2.59,24.42,-3.15,2.09,-0.13,4.3,-0.23,6.68,-0.33"/>
 # </g>
 # </svg>"""))
-    print(hex(ord("𠂊")))
-    testKanji = Kanji(chr(int("2008a", 16)), (300, 300), 8)
+    #print(hex(ord("𠂊")))
+    testKanji = Kanji("返", (300, 300), 8)
     #print(testKanji.pBzPoints)
     blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
     # TODO: cannot change color of svg with altervalue

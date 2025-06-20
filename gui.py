@@ -3,6 +3,8 @@ import pygame as pyg
 from os import path
 from typing import Callable, Union #, TypeAlias
 
+flags = pyg.RESIZABLE | pyg.DOUBLEBUF
+
 pyg.init()
 
 def assetPath(file: str):
@@ -17,7 +19,7 @@ def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     ogSize, currentSize = size, size
     scaleX, scaleY, scale = 1, 1, 1
 
-    screen = pyg.display.set_mode(size = ogSize, flags = pyg.RESIZABLE)
+    screen = pyg.display.set_mode(size = ogSize, flags = flags)
     pyg.display.set_caption(caption)
 
 def scaleDisplay(event, *args):
@@ -27,7 +29,7 @@ def scaleDisplay(event, *args):
     """
     global currentSize, scaleX, scaleY, scale
     # prevent the screen from getting smaller than the designated amount
-    screen = pyg.display.set_mode((max(ogSize[0], event.x), max(ogSize[1], event.y)), flags = pyg.RESIZABLE)
+    screen = pyg.display.set_mode((max(ogSize[0], event.x), max(ogSize[1], event.y)), flags = flags)
 
     displaySize = pyg.display.get_window_size()
     scaleX = displaySize[0]/ogSize[0]

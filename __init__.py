@@ -94,7 +94,6 @@ class Deck():
             i.delete()
         testingKanjiMasks = []
 
-
     @classmethod
     def newRound(cls):
         cls.clearCanvas()
@@ -152,22 +151,25 @@ class Animate():
     def begin(cls):
         if cls.endNow:
             return
-        
-        index = int(cls.counter/len(Deck.kanji.pBzPoints[0]))
-        point = cls.counter%len(Deck.kanji.pBzPoints[0])
-        cls.frames[index].points.append(Deck.kanji.pBzPoints[index][point])
-        cls.frames[index].scale()
-        gui.GUI.trueTransform(cls.frames[index], "set_alpha", 127)
+
+        cls.frames[Animate.currentFrame].points.append(Deck.kanji.pBzPoints[Animate.currentFrame][cls.counter])
+        cls.frames[Animate.currentFrame].scale()
+        gui.GUI.trueTransform(cls.frames[Animate.currentFrame], "set_alpha", 127)
 
         cls.counter += 1
-        if int(cls.counter/len(Deck.kanji.pBzPoints[0])) == len(Deck.kanji.pBzPoints):
+        if len(Deck.kanji.pBzPoints[Animate.currentFrame]) == cls.counter:
+            Animate.currentFrame += 1
+            cls.counter = 0
+
+        if Animate.currentFrame == len(Deck.kanji.pBzPoints):
+            Animate.animatedKanji = Deck.kanji.str
             pyg.time.set_timer(endAnimateEvent, 2500, 1)
         else:
-            pyg.time.set_timer(animateEvent, 1, 1)
+            pyg.time.set_timer(animateEvent, 1 if cls.counter != 0 else 100, 1)
 
     @classmethod
     def end(cls):
-        if Animate.animatedKanji != Deck.prompt[Deck.counter] or not Deck.active:
+        if Animate.animatedKanji != Deck.kanji.str or not Deck.active:
             return
 
         for i in cls.frames:
@@ -179,6 +181,7 @@ class Animate():
     @classmethod
     def tryEnd(cls):
         cls.endNow = True
+        Animate.animatedKanji = Deck.kanji.str
         cls.end()
 
 class Stroke(pyg.sprite.Sprite):
@@ -197,9 +200,6 @@ class Stroke(pyg.sprite.Sprite):
         self.image = pyg.transform.scale(Stroke.frame, sprite.rect.size)
         self.rect = self.image.get_rect(center = sprite.rect.center)
 
-        self.parent = sprite
-        self.pos: tuple[int, int] = sprite.pos
-        self.dimensions = sprite.dimensions
         self.color = "white"
         self.points = []
 
@@ -236,7 +236,6 @@ class Stroke(pyg.sprite.Sprite):
 # -------------------- GUI Events --------------------
 # drawGUI events
 def drawInit(self:gui.GUI):
-    #global translationX, translationY
     self.strokes.append(Stroke(drawGUI))
 
     finalPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
@@ -269,7 +268,7 @@ def undoStroke(self:gui.GUI):
 
 # hintGUI events
 def hintAnimate(self:gui.GUI):
-    Animate.animatedKanji = Deck.prompt[Deck.counter]
+    Animate.currentFrame = 0
     pyg.time.set_timer(animateEvent, 10, 0)
     gui.GUI.disable(self)
 
@@ -367,7 +366,7 @@ def prepKWP(card):
     if Deck.kanji == "N/A":
         Deck.clearCanvas()
 
-        gui.GUI.disable(continueGUI, oldAccuracyGUI)
+        gui.GUI.deactivate(continueGUI, oldAccuracyGUI)
         gui.GUI.activate(undoGUI, hintGUI, submitGUI)
         gui.GUI.disable(drawGUI, hintGUI, submitGUI)
         promptGUI.write("N/A")
@@ -410,8 +409,9 @@ def kanjiWritingPractice_bg():
         gui.GUI.activeGUI.draw(gui.screen)
         gui.GUI.activeGUI.update(mouse_pos)
         Stroke.strokeGroup.draw(gui.screen)
+        #undoGUI.write(str(int(clock.get_fps())), "black")
 
-        pyg.display.flip()
+        pyg.display.update([i.rect for i in gui.GUI.allGUI])
         clock.tick(60)
     pyg.display.quit()
 
