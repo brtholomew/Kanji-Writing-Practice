@@ -32,7 +32,7 @@ def scaleDisplay(event, *args):
     displaySize = pyg.display.get_window_size()
     scaleX = displaySize[0]/ogSize[0]
     scaleY = displaySize[1]/ogSize[1]
-    # take the min of the x/y scales so the image itself retains its original aspect ratio
+    # maintain original aspect ratio
     scale = min(scaleX, scaleY)
 
     # this is exclusively used for calculating missing original attributes
@@ -48,12 +48,11 @@ def scaleDisplay(event, *args):
                 sprite.pos = (sprite.rect.centerx/prevX, sprite.rect.centery/prevY)
                 sprite.dimensions = (sprite.rect.w/prev, sprite.rect.h/prev)
             _scale(sprite)
-            # im too lazy to code good text scaling so here's my terrible solution
             if hasattr(sprite, "fontInfo"):
                 guiText = sprite.fontInfo["gui"]
                 guiText.image = pyg.font.SysFont("uddigikyokashonr", sprite.rect.h).render(sprite.fontInfo["text"], False, sprite.fontInfo["color"])
                 guiText.image.set_alpha(sprite.image.get_alpha())
-                guiText.rect = guiText.image.get_rect(center = sprite.rect.center)
+                guiText.rect = guiText.image.get_rect(midtop = sprite.rect.midtop)
         if hasattr(sprite, "scale") and callable(sprite.scale):
             sprite.scale()
 
@@ -68,7 +67,7 @@ class Spritesheet():
     Only supports sheets with one row
     """
     def __init__(self, dimensions: tuple[int, int], image: str):
-        # NOTE: dimensions is the size of every sprite in the spritesheet, NOT the size you want it to be
+        # NOTE: dimensions is the size of every sprite in the spritesheet, NOT the desired size
         self.state = 0
         self.width = dimensions[0]
         self.height = dimensions[1]
@@ -132,13 +131,12 @@ class GUI(pyg.sprite.Sprite):
             if obj.hovering:
                 if event.type == pyg.MOUSEBUTTONDOWN:
                     obj.clicked()
-                if event.type == pyg.MOUSEMOTION and obj.dragging: #and pyg.mouse.get_pressed()[0]:
+                if event.type == pyg.MOUSEMOTION and obj.dragging:
                     obj.dragged()
                 if event.type == pyg.MOUSEBUTTONUP and obj.dragging:
                     obj.released()
             elif event.type == pyg.MOUSEBUTTONUP:
                     obj.dragging = False
-                    # for buttons
                     obj.changeState(0) if hasattr(obj, "ogimage") and obj.enabled else None
 
     @classmethod
@@ -199,9 +197,10 @@ class GUI(pyg.sprite.Sprite):
         """
         if hasattr(self, "fontInfo"):
             GUI.deactivate(self.fontInfo["gui"])
-        # im too lazy to code good text scaling so here's my terrible solution
-        guiText = GUI.activate(GUI(self.pos, self.dimensions, image = pyg.font.SysFont("uddigikyokashonr", self.rect.h).render(str(text), False, color)))[0]
-        # i forgot so im leaving a note here but IM REMOVING guiText FROM THE ALL GUI LIST BECAUSE THAT'S HOW IT WILL SCALE PROPERLY
+        guiText = GUI.activate(GUI(self.pos, self.dimensions))[0]
+        guiText.image = pyg.font.SysFont("uddigikyokashonr", self.rect.h).render(str(text), False, color)
+        guiText.rect = guiText.image.get_rect(midtop = self.rect.midtop)
+        # text scaling is handled separately from regular GUI
         GUI.allGUI.remove(guiText)
         self.fontInfo = {"gui" : guiText, "text" : text, "color" : color}
 

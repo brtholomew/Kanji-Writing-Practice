@@ -34,7 +34,6 @@ def replaceSubstring(stri: str, newValue: Union[str, float], index: tuple):
 
 def standardizePath(svg: str, startIndex: int, endIndex: int):
     "Fixes any inconsistencies in the path parameter for extractPathParameter"
-    # hopefully i won't have to update this too often
     temp = []
     for i in range(startIndex, endIndex):
         if not svg[i] == " ":
@@ -60,7 +59,6 @@ def extractPathParameter(svg: str):
     ]\n
     """
     try:
-        # temporary solution
         startIndex = svg.index(' d="')
     except ValueError:
         raise SvgError(f"Could not find d parameter in: {svg}")
@@ -74,7 +72,6 @@ def extractPathParameter(svg: str):
     # coordinate counter 
     cCounter = 1
 
-    # this for loop might be the most horrid abombination i've ever created in my entire life
     for i in range(startIndex, endIndex):
         # link current command to a list of list of x and y coordinates
         # every x/y coordinate will be represented as a list
@@ -108,12 +105,10 @@ def extractPathParameter(svg: str):
             else: # create new list of x/y coordinates
                 counter = 0
                 if cCounter == 3: # handles when a curveto command is given a multiple of 3 coordinates
-                    # NOTE: if something regarding svgs breaks, it's probably because i need to code functionality for this for EVERY command
                     d.append({currentCommand: []})
                     cCounter = 0
                 d[-1][currentCommand].append([["-"]] if svg[i] == "-" else [])
                 cCounter += 1
-    # real quick check if the svg has been processed properly
     for i in d:
         for k,v in i.items():
             if k.upper() == "C" and not len(v) == 3:
@@ -138,7 +133,7 @@ def extractPosition(svg: str, keyword: str, start: int = 0):
         while svg[endIndex] in ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", " "):
             endIndex += 1
     except ValueError:
-        # svg file ends in a number somehow
+        # svg file ends in a number
         raise SvgError(f"This SVG file is invalid: {svg}")
     return (startIndex, endIndex)
 
@@ -160,7 +155,6 @@ def alterValue(svg: str, **kwargs):
         svg, oldValue = replaceSubstring(svg, value, (startIndex, endIndex))
 
         if keyword == "width" or keyword == "height":
-            # hey why didn't you just use an external library for this?
             d = extractPathParameter(svg)
 
             temp = ""
@@ -196,7 +190,6 @@ class Bezier():
                 if k.upper() == "M":
                     for c in v:
                         x, y = lolToCoords(c)
-                        # final point becomes the initial point of the next curve
                         finalPos = (x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y)
                 elif k.upper() == "C":
                     self.controlPoints.append([])
@@ -204,7 +197,6 @@ class Bezier():
                     for c in v:
                         x, y = lolToCoords(c)
                         self.controlPoints[-1].append((x, y) if k.isupper() else (finalPos[0]+x, finalPos[1]+y))
-                    # final point becomes the initial point of the next curve
                     finalPos = self.controlPoints[-1][-1]
                 elif k.upper() == "S":
                     controlPoint = self.controlPoints[-1][-2]
@@ -219,7 +211,6 @@ class Bezier():
                 else:
                     raise SvgError(f"Bezier class not built for processing this command: {k}")
         
-        # build the equations for every bezier curve
         self.functions = []
         for i in self.controlPoints:
             # explicit form of equation for cubic bezier curve
@@ -276,9 +267,7 @@ class Kanji():
 
         self.metadata = dict(width = dimensions[0], height = dimensions[1], strokeWidth = strokeWidth)
 
-        # linearly interpolated points for every stroke in this list
         self.pBzPoints = []
-        
         try:
             for b in [Bezier(i) for i in self.svgList]:
                 self.pBzPoints.append([])
@@ -331,7 +320,6 @@ class Kanji():
         IOList = []
         for i in args:
             # code taken from https://python-forum.io/thread-40976.html
-            # i don't really get it but basically it turns a string into bytes, which is then turned into a filelike object, which can be read by pygame's image loader
             IOList.append(pyg.image.load(BytesIO(bytes(i, encoding = "utf-8"))).convert_alpha())
         return [pyg.image.load(BytesIO(bytes(i, encoding = "utf-8"))).convert_alpha() for i in args]
     

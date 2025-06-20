@@ -29,9 +29,6 @@ clock = pyg.time.Clock()
 # pygame screen
 gui.initDisplay((300, 300), "Kanji Writing Practice")
 
-# where does this go???
-redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
-
 class Deck():
     """
     Processes the anki card, also has some gamestate attributes/methods
@@ -155,7 +152,7 @@ class Animate():
     def begin(cls):
         if cls.endNow:
             return
-        # draw every stroke from the prompt pBzPoints list
+        
         index = int(cls.counter/len(Deck.kanji.pBzPoints[0]))
         point = cls.counter%len(Deck.kanji.pBzPoints[0])
         cls.frames[index].points.append(Deck.kanji.pBzPoints[index][point])
@@ -170,8 +167,7 @@ class Animate():
 
     @classmethod
     def end(cls):
-        #if cls.isAnimating or not Deck.active:
-        if Animate.animatedKanji != Deck.kanji.str[Deck.counter] or not Deck.active:
+        if Animate.animatedKanji != Deck.prompt[Deck.counter] or not Deck.active:
             return
 
         for i in cls.frames:
@@ -184,7 +180,6 @@ class Animate():
     def tryEnd(cls):
         cls.endNow = True
         cls.end()
-
 
 class Stroke(pyg.sprite.Sprite):
     """
@@ -223,15 +218,13 @@ class Stroke(pyg.sprite.Sprite):
         """
         Redraws the frame with the correct scaling
         """
-        
-        # reset the frame
         alpha = self.image.get_alpha()
+        # reset the frame
         self.image = pyg.transform.scale(Stroke.frame, self.rect.size)
 
         if not self.points:
             return
         
-        # redraw every point onto it
         temp = self.points.copy()
         self.points = []
         self.initPos = (temp[0][0]*gui.scale, temp[0][1]*gui.scale)
@@ -243,21 +236,17 @@ class Stroke(pyg.sprite.Sprite):
 # -------------------- GUI Events --------------------
 # drawGUI events
 def drawInit(self:gui.GUI):
-    # create a new frame
-    global translationX, translationY
+    #global translationX, translationY
     self.strokes.append(Stroke(drawGUI))
 
-    # localize coordinates
-    translationX, translationY = self.rect.topleft
-    finalPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
+    finalPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
     self.strokes[-1].initPos = finalPos
     self.strokes[-1].draw(finalPos)
     gui.GUI.enable(undoGUI)
 
 def drawDrag(self:gui.GUI):
-    # draw circles on that frame
-    finalPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
+    finalPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
     self.strokes[-1].draw(finalPos)
 
@@ -267,9 +256,8 @@ def drawPointsCheck(self:gui.GUI):
     #print(self.strokes[-1].points)
 
 def drawCheck(self:gui.GUI):
-    # my terrible solution to a mild problem
     if not self.hovering and self.dragging:
-        self.strokes[-1].initPos = (mouse_pos[0] - translationX, mouse_pos[1] - translationY)
+        self.strokes[-1].initPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
 #undoGUI events
 def undoStroke(self:gui.GUI):
@@ -281,13 +269,13 @@ def undoStroke(self:gui.GUI):
 
 # hintGUI events
 def hintAnimate(self:gui.GUI):
-    #Animate.isAnimating = True
-    Animate.animatedKanji = Deck.kanji.str[Deck.counter]
+    Animate.animatedKanji = Deck.prompt[Deck.counter]
     pyg.time.set_timer(animateEvent, 10, 0)
     gui.GUI.disable(self)
 
 # submitGUI events
 testingKanjiMasks = []
+redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 def submit(self:gui.GUI):
     global testingKanjiMasks
     Animate.tryEnd()
@@ -398,7 +386,6 @@ def kanjiWritingPractice_bg():
     global mouse_pos, running
 
     if running or not hasattr(mw.reviewer, "state") or mw.state != "review":
-        print("i feel like this if statement will never be called")
         return
 
     pyg.display.init()
