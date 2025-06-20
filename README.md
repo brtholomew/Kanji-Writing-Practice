@@ -11,6 +11,7 @@ If a kanji character is found in the current card, you can begin drawing in the 
 If multiple kanji characters are present, you will draw them one after the other.
 
 **Buttons**
+
 There are three buttons:
 - Undo
 - Hint
@@ -34,7 +35,9 @@ This addon supports roughly 6500 different kanji characters. If it tries renderi
 
 # Acknowledgements
 Data for kanji retrieved from KanjiVG.
+
 (KanjiVG-r20250422-main)
+
 https://kanjivg.tagaini.net
 
 Special thanks to: 
