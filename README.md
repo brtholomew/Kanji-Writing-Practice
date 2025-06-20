@@ -28,7 +28,7 @@ Once you have a score for a specific kanji, it will be saved in the config. The 
 # Config
 In the config, settings for hint animation speed, kanji scores, and blacklisted/whitelisted decks are provided.
 
-Hint animation speed ranges from 15-100. Note that higher animation speeds can result in certain kanji getting slightly distorted. This is due to limitations with Pygame.
+Hint animation speed ranges from 15-100. Note that higher animation speeds can result in certain kanji getting slightly distorted, while slower animation speeds might lag the program at fullscreen. This is due to limitations with Pygame.
 
 # Kanji
 This addon supports roughly 6500 different kanji characters. If it tries rendering a kanji it doesn't recognize or certain Chinese characters, the addon will crash.
