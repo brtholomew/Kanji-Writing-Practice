@@ -15,6 +15,7 @@ from aqt.utils import ask_user
 config = mw.addonManager.getConfig(__name__)
 
 # check and correct invalid config values
+# 100 = max speed, 15 = min speed
 conSpeed = config["speed"]
 if "speed" in config and type(conSpeed) == int or type(conSpeed) == float:
     config["speed"] = max(min(int(conSpeed), 100), 15)
@@ -40,11 +41,11 @@ class Deck():
     kanji: Union[svg.Kanji, str] = "N/A"
 
     # gamestate attributes
-    x = 300
-    y = 300
+    x = gui.screen.get_rect().w
+    y = gui.screen.get_rect().h
 
-    active = False
     enabled = False
+    active = False
 
     @classmethod
     def newCard(cls, question: str):
@@ -53,14 +54,15 @@ class Deck():
             # code taken from Kanji Colorizer: https://github.com/cayennes/kanji-colorize/blob/main/anki/kanji_colorizer.py
             if ord(c) >= 19968 and ord(c) <= 40879:
                 cls.prompt.append(c)
-                try:
-                    cls.kanjiDict[c] = svg.Kanji(c, drawGUI.dimensions, Stroke.width, 100 - config["speed"] + 15)
-                except FileNotFoundError:
-                    pyg.display.quit()
-                    raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
-                except svg.SvgError:
-                    pyg.display.quit()
-                    raise svg.SvgError(f"An error occured while working with this kanji: {c}")
+                if not c in cls.kanjiDict:
+                    try:
+                        cls.kanjiDict[c] = svg.Kanji(c, drawGUI.dimensions, Stroke.width, 100 - config["speed"] + 15)
+                    except FileNotFoundError:
+                        pyg.display.quit()
+                        raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
+                    except svg.SvgError:
+                        pyg.display.quit()
+                        raise svg.SvgError(f"An error occured while working with this kanji: {c}")
         if not cls.prompt:
             cls.prompt.append("N/A")
             cls.kanji = "N/A"
@@ -87,12 +89,13 @@ class Deck():
     # gamestate methods
     @staticmethod
     def clearCanvas():
-        global testingKanjiMasks
-        Stroke.strokeGroup.empty()
-        drawGUI.strokes = []
-        for i in testingKanjiMasks:
-            i.delete()
-        testingKanjiMasks = []
+        for i in Stroke.strokeGroup:
+            i.points = []
+            i.colors = []
+            i.scale()
+        gui.GUI.trueTransform(drawStroke, "set_alpha", 255)
+
+        gui.GUI.deactivate(gradeGUI)
 
     @classmethod
     def newRound(cls):
@@ -124,7 +127,7 @@ class Animate():
     """
     Handles animating the kanji drawing
     """
-    frames = []
+    frame = None # Stroke object
     counter = 0
     endNow: bool = False
     animatedKanji: str = None
@@ -140,41 +143,38 @@ class Animate():
         cls.endNow = False
 
         colors = ("red", "orange", "yellow", "green", "blue", "purple")
-        counter = 0
-        cls.frames = []
-        for i in range(len(kanji.pBzPoints)):
-            cls.frames.append(Stroke(drawGUI))
-            cls.frames[-1].color = colors[counter%6]
-            counter += 1
+        cls.frame.colors = [colors[i%6] for i in range(len(kanji.pBzPoints))]
 
     @classmethod
     def begin(cls):
         if cls.endNow:
             return
 
-        cls.frames[Animate.currentFrame].points.append(Deck.kanji.pBzPoints[Animate.currentFrame][cls.counter])
-        cls.frames[Animate.currentFrame].scale()
-        gui.GUI.trueTransform(cls.frames[Animate.currentFrame], "set_alpha", 127)
+        if cls.counter == 0:
+            # TODO: readability
+            cls.frame.points.append([])
+            cls.frame.initPos = tuple(i*gui.scale for i in Deck.kanji.pBzPoints[cls.currentFrame][0])
+
+        cls.frame.draw(tuple(i*gui.scale for i in Deck.kanji.pBzPoints[Animate.currentFrame][cls.counter]), cls.currentFrame)
 
         cls.counter += 1
-        if len(Deck.kanji.pBzPoints[Animate.currentFrame]) == cls.counter:
-            Animate.currentFrame += 1
+        if cls.counter == len(Deck.kanji.pBzPoints[cls.currentFrame]):
+            cls.currentFrame += 1
             cls.counter = 0
 
-        if Animate.currentFrame == len(Deck.kanji.pBzPoints):
-            Animate.animatedKanji = Deck.kanji.str
+        if cls.currentFrame == len(Deck.kanji.pBzPoints):
+            cls.animatedKanji = Deck.kanji.str
             pyg.time.set_timer(endAnimateEvent, 2500, 1)
         else:
-            pyg.time.set_timer(animateEvent, 1 if cls.counter != 0 else 100, 1)
+            pyg.time.set_timer(animateEvent, 1 if cls.counter != 0 else 250, 1)
 
     @classmethod
     def end(cls):
-        if Animate.animatedKanji != Deck.kanji.str or not Deck.active:
+        if cls.animatedKanji != Deck.kanji.str or not Deck.active:
             return
 
-        for i in cls.frames:
-            i.points = []
-            i.scale()
+        cls.frame.points = []
+        cls.frame.scale()
         cls.counter = 0
         gui.GUI.enable(hintGUI)
 
@@ -195,75 +195,94 @@ class Stroke(pyg.sprite.Sprite):
 
     width = 8
 
-    def __init__(self, sprite):
+    def __init__(self, sprite: pyg.sprite.Sprite):
         super().__init__()
         self.image = pyg.transform.scale(Stroke.frame, sprite.rect.size)
         self.rect = self.image.get_rect(center = sprite.rect.center)
+        self.parent = sprite
 
-        self.color = "white"
+        self.colors = []
         self.points = []
 
         Stroke.strokeGroup.add(self)
 
-    def draw(self, finalPos: tuple[int, int]):
+    def draw(self, finalPos: tuple[int, int], colorIndex: int = 0):
         """
         Draws a line on the frame\n
         """
-        self.points.append([i/gui.scale for i in finalPos])
-        pyg.draw.circle(self.image, self.color, finalPos, Stroke.width*gui.scale/2)
-        pyg.draw.line(self.image, self.color, self.initPos, finalPos, int(Stroke.width*gui.scale))
+        self.points[-1].append(tuple(i/gui.scale for i in finalPos))
+        pyg.draw.circle(self.image, self.colors[colorIndex], finalPos, Stroke.width*gui.scale/2)
+        pyg.draw.line(self.image, self.colors[colorIndex], self.initPos, finalPos, int(Stroke.width*gui.scale))
         self.initPos = finalPos
+
+    def explode(self, deactivate: bool = True):
+        "Returns a list of Stroke objects derrived from an original Stroke"
+        temp = []
+        for i in range(len(self.points)):
+            s = Stroke(self.parent)
+            s.points.append(self.points[i])
+            s.colors.append(self.colors[i])
+            s.scale()
+            temp.append(s)
+            if deactivate:
+                Stroke.strokeGroup.remove(s)
+        return temp
 
     def scale(self):
         """
         Redraws the frame with the correct scaling
         """
         alpha = self.image.get_alpha()
+        
         # reset the frame
         self.image = pyg.transform.scale(Stroke.frame, self.rect.size)
+        gui.GUI.trueTransform(self, "set_alpha", alpha)
 
-        if not self.points:
+        if not self.points or not self.points[0]:
             return
         
         temp = self.points.copy()
         self.points = []
-        self.initPos = (temp[0][0]*gui.scale, temp[0][1]*gui.scale)
 
-        for i in temp:
-            self.draw((i[0]*gui.scale, i[1]*gui.scale))
-        self.image.set_alpha(alpha)
+        for s in temp:
+            if not s:
+                break
+            self.initPos = tuple(i*gui.scale for i in s[0])
+            self.points.append([])
+            colorIndex = temp.index(s)
+            for p in s:
+                self.draw((p[0]*gui.scale, p[1]*gui.scale), colorIndex)
 
 # -------------------- GUI Events --------------------
 # drawGUI events
 def drawInit(self:gui.GUI):
-    self.strokes.append(Stroke(drawGUI))
-
     finalPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
-    self.strokes[-1].initPos = finalPos
-    self.strokes[-1].draw(finalPos)
+    # TODO: readability
+    drawStroke.points.append([])
+    drawStroke.colors.append("white")
+    drawStroke.initPos = finalPos
+    drawStroke.draw(finalPos)
     gui.GUI.enable(undoGUI)
 
 def drawDrag(self:gui.GUI):
     finalPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
-    self.strokes[-1].draw(finalPos)
+    drawStroke.draw(finalPos)
 
 def drawPointsCheck(self:gui.GUI):
     gui.GUI.enable(undoGUI)
-    #print(len(Stroke.strokeGroup))
-    #print(self.strokes[-1].points)
 
 def drawCheck(self:gui.GUI):
     if not self.hovering and self.dragging:
-        self.strokes[-1].initPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
+        drawStroke.initPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
 #undoGUI events
 def undoStroke(self:gui.GUI):
-    if drawGUI.strokes:
-        stroke = drawGUI.strokes.pop()
-        Stroke.strokeGroup.remove(stroke)
-        if not drawGUI.strokes:
+    if drawStroke.points:
+        drawStroke.points.pop()
+        drawStroke.scale()
+        if not drawStroke.points:
             gui.GUI.disable(self)
 
 # hintGUI events
@@ -273,38 +292,44 @@ def hintAnimate(self:gui.GUI):
     gui.GUI.disable(self)
 
 # submitGUI events
-testingKanjiMasks = []
 redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 def submit(self:gui.GUI):
-    global testingKanjiMasks
     Animate.tryEnd()
     Deck.active = False
     gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
 
-    strokeMasks = [pyg.mask.from_surface(i.image) for i in drawGUI.strokes]
-    testingKanjiMasks = [gui.GUI((150, 150), (175, 175), image = svg.Kanji.svgTextToSurf(svg.alterValue(i, **{"stroke-width" : 16}))[0]) for i in Deck.kanji.svgList]
-    kanjiMasks = [pyg.mask.from_surface(i.image) for i in testingKanjiMasks]
+    strokeMasks = [pyg.mask.from_surface(i.image) for i in drawStroke.explode()]
+    testingKanjiMasks = svg.Kanji.svgTextToSurf(*[svg.alterValue(i, width = drawGUI.dimensions[0]*gui.scale, height = drawGUI.dimensions[1]*gui.scale, **{"stroke-width" : 16*gui.scale}) for i in Deck.kanji.svgList])
+    kanjiMasks = [pyg.mask.from_surface(i) for i in testingKanjiMasks]
+    mergedSurface = pyg.surface.Surface((drawGUI.dimensions[0]*gui.scale, drawGUI.dimensions[1]*gui.scale), pyg.SRCALPHA)
+
     scores = []
     for i in range(len(strokeMasks)):
         try:
-            gui.GUI.trueTransform(drawGUI.strokes[i], "set_alpha", 127)
+            kjm = testingKanjiMasks[i]
             grade = min(kanjiMasks[i].overlap_area(strokeMasks[i], (0, 0))/max(Deck.kanji.maskList[i].count(), strokeMasks[i].count()), 1.0)
             scores.append(grade)
             redGreen = redYellowGreenBezier.functions[0](grade)
-            pyg.pixelarray.PixelArray(testingKanjiMasks[i].ogimage).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
-            pyg.pixelarray.PixelArray(testingKanjiMasks[i].image).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
-            gui.GUI.trueTransform(testingKanjiMasks[i], "set_alpha", 127)
+            pyg.pixelarray.PixelArray(kjm).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
+            kjm.set_alpha(127)
+            mergedSurface.blit(kjm, (0, 0))
+
         except IndexError:
             scores.append(0)
     
     if len(strokeMasks) < len(kanjiMasks):
         for i in range(1, len(kanjiMasks)-len(strokeMasks)+1):
+            kjm = testingKanjiMasks[-i]
             scores.append(0)
-            pyg.pixelarray.PixelArray(testingKanjiMasks[-i].ogimage).replace((0, 0, 0), (0, 0, 255))
-            pyg.pixelarray.PixelArray(testingKanjiMasks[-i].image).replace((0, 0, 0), (0, 0, 255))
-            gui.GUI.trueTransform(testingKanjiMasks[-i], "set_alpha", 127)
+            pyg.pixelarray.PixelArray(kjm).replace((0, 0, 0), (0, 0, 255))
+            kjm.set_alpha(127)
+            mergedSurface.blit(kjm, (0, 0))
     
-    gui.GUI.activate(*testingKanjiMasks)
+    gui.GUI.trueTransform(drawStroke, "set_alpha", 127)
+
+    global gradeGUI
+    gradeGUI.delete()
+    gradeGUI = gui.GUI.activate(gui.GUI(drawGUI.pos, drawGUI.dimensions, image = mergedSurface))[0]
 
     score = round(sum(scores)/len(kanjiMasks), 2)
     redGreen = redYellowGreenBezier.functions[0](score)
@@ -328,7 +353,6 @@ def continueClicked(self: gui.GUI):
 
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, heave = drawDrag, active = drawCheck)
-drawGUI.strokes = []
 undoGUI = gui.GUI((85, 275), (30, 30), image = gui.Spritesheet((500, 500), "undogui.png"), freed = undoStroke)
 hintGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "hintgui.png"), freed = hintAnimate)
 submitGUI = gui.GUI((215, 275), (30, 30), image = gui.Spritesheet((500, 500), "submitgui.png"), freed = submit)
@@ -336,9 +360,15 @@ promptGUI = gui.GUI((150, 30), (30, 30), image = "grid.png")
 continueGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "continuegui.png"), freed = continueClicked)
 accuracyGUI = gui.GUI((215, 30), (60, 30), image = "accuracygui.png")
 oldAccuracyGUI = gui.GUI((85, 30), (60, 30), image = "accuracygui.png")
+gradeGUI = gui.GUI(drawGUI.pos, drawGUI.dimensions)
 gui.GUI.trueTransform(oldAccuracyGUI, "set_alpha", 127)
 gui.GUI.activate(drawGUI, undoGUI, hintGUI, submitGUI, promptGUI, accuracyGUI)
 gui.GUI.disable(undoGUI)
+
+# -------------------- Stroke Initializing --------------------
+drawStroke = Stroke(drawGUI)
+Animate.frame = Stroke(drawGUI)
+gui.GUI.trueTransform(Animate.frame, "set_alpha", 127)
 
 # -------------------- Main Loop --------------------
 pyg.display.quit()
@@ -357,9 +387,8 @@ def enableKWP(card):
 
 def prepKWP(card):
     pyg.display.init()
-    gui.initDisplay((300, 300), "Kanji Writing Practice")
 
-    Deck.reset()
+    gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
     Deck.newCard(card.note().fields[0])
     gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
 
@@ -377,7 +406,6 @@ def prepKWP(card):
         return
     
     Deck.newRound()
-
     pyg.display.quit()
     kanjiWritingPractice()
 
@@ -388,7 +416,7 @@ def kanjiWritingPractice_bg():
         return
 
     pyg.display.init()
-    gui.initDisplay((300, 300), "Kanji Writing Practice")
+    gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
     running = True
 
     while running:
@@ -409,10 +437,14 @@ def kanjiWritingPractice_bg():
         gui.GUI.activeGUI.draw(gui.screen)
         gui.GUI.activeGUI.update(mouse_pos)
         Stroke.strokeGroup.draw(gui.screen)
-        #undoGUI.write(str(int(clock.get_fps())), "black")
+
+        # undoGUI.write(str(int(clock.get_fps())), "black")
 
         pyg.display.update([i.rect for i in gui.GUI.allGUI])
         clock.tick(60)
+
+    # bandaid fix
+    gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
     pyg.display.quit()
 
 # code taken from the Anki development forums: https://forums.ankiweb.net/t/pygame-addon-has-trouble-switching-from-overview-to-review/62502/5
@@ -424,6 +456,7 @@ def kanjiWritingPractice():
 def terminateKWP(*args):
     global running
     running = False
+    Deck.enabled = False
 
 gui_hooks.reviewer_did_show_question.append(enableKWP)
 gui_hooks.reviewer_did_show_answer.append(terminateKWP)

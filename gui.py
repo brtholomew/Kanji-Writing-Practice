@@ -171,6 +171,7 @@ class GUI(pyg.sprite.Sprite):
 
     @staticmethod
     def trueTransform(sprite: pyg.sprite.Sprite, method:str, *args):
+        "Affects image and ogimage (if possible)"
         getattr(sprite.image, method)(*args)
         if hasattr(sprite, "ogimage"):
             getattr(sprite.ogimage if isinstance(sprite.ogimage, pyg.surface.Surface) else sprite.ogimage.returnState(), method)(*args)
@@ -187,7 +188,8 @@ class GUI(pyg.sprite.Sprite):
         _scale(self)
 
     def delete(self):
-        GUI.deactivate(GUI.allGUI.pop(GUI.allGUI.index(self)))
+        GUI.allGUI.remove(self)
+        GUI.deactivate(self)
 
     def write(self, text: str, color = "white"):
         """
