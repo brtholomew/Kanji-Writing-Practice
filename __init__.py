@@ -41,8 +41,10 @@ class Deck():
     kanji: Union[svg.Kanji, str] = "N/A"
 
     # gamestate attributes
-    x = gui.screen.get_rect().w
-    y = gui.screen.get_rect().h
+    # x = gui.screen.get_rect().w
+    # y = gui.screen.get_rect().h
+    x = 300
+    y = 300
 
     enabled = False
     active = False
@@ -427,6 +429,7 @@ def kanjiWritingPractice_bg():
                 running = False
             elif event.type == pyg.WINDOWRESIZED:
                 gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
+                print(drawStroke.rect)
             elif event.type == animateEvent:
                 Animate.begin()
             elif event.type == endAnimateEvent:
@@ -444,7 +447,8 @@ def kanjiWritingPractice_bg():
         clock.tick(60)
 
     # bandaid fix
-    gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
+    #gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
+    print(drawStroke.rect)
     pyg.display.quit()
 
 # code taken from the Anki development forums: https://forums.ankiweb.net/t/pygame-addon-has-trouble-switching-from-overview-to-review/62502/5

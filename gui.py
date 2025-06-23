@@ -25,7 +25,7 @@ def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
 def scaleDisplay(event, *args):
     """
     Correctly scales everything when the pygame display is resized\n
-    Accepts any sprite object, or object with a "scale" method
+    Accepts any sprite object, or object with a "scale" method, though a pixel may be lost.\n
     """
     global currentSize, scaleX, scaleY, scale
     # prevent the screen from getting smaller than the designated amount
@@ -44,8 +44,7 @@ def scaleDisplay(event, *args):
 
     for sprite in args:
         if isinstance(sprite, pyg.sprite.Sprite):
-            if not isinstance(sprite, GUI):
-                # sprite is probably missing all the necessary attributes
+            if not all(hasattr(sprite, i) for i in ("ogimage", "pos", "dimensions")):
                 sprite.ogimage = sprite.image
                 sprite.pos = (sprite.rect.centerx/prevX, sprite.rect.centery/prevY)
                 sprite.dimensions = (sprite.rect.w/prev, sprite.rect.h/prev)
