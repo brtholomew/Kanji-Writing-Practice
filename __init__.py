@@ -18,6 +18,7 @@ def cancelKWP(self):
     #Deck.paused = Deck.running
     if Deck.running:
         terminateKWP()
+        Deck.paused = True
         show_warning("Kanji Writing Practice has been terminated due to an external window opening. Reload deck to reopen KWP.")
     self._ogshow(self)
 
@@ -25,7 +26,6 @@ QWidget._ogshow = QWidget.show
 QWidget.show = cancelKWP
 
 # def resumeKWP(self, event):
-#     print("lawlawlalwal")
 #     self._ogcloseEvent(self, event)
 #     if Deck.paused:
 #         kanjiWritingPractice()
@@ -59,17 +59,17 @@ class Deck():
     """
     # card attributes
     prompt = []
-    kanjiDict = {"N/A" : "N/A"}
+    kanjiDict = {"X" : "X"}
     counter = 0
-    kanji: Union[svg.Kanji, str] = "N/A"
+    kanji: Union[svg.Kanji, str] = "X"
 
     # gamestate attributes
     x = gui.screen.get_rect().w
     y = gui.screen.get_rect().h
     # Pygame window is active
     running = False
-    # # Exclusively for handling when KWP is paused by an Anki window GUI
-    # paused = False
+    # Exclusively for handling when KWP is paused by an Anki window GUI
+    paused = False
     # User is allowed to draw
     active = False
 
@@ -91,8 +91,8 @@ class Deck():
                         pyg.display.quit()
                         raise svg.SvgError(f"An error occured while working with this kanji: {c}")
         if not cls.prompt:
-            cls.prompt.append("N/A")
-            cls.kanji = "N/A"
+            cls.prompt.append("X")
+            cls.kanji = "X"
             return
         cls.initKanji()
 
@@ -402,6 +402,8 @@ pyg.display.quit()
 def enableKWP(card):
     global deckID
     deckID = mw.col.decks.current()["id"]
+    if Deck.paused:
+        return
 
     if not deckID in config["whitelist"] + config["blacklist"]:
         ask_user("Would you like to enable Kanji Writing Practice for this deck?", callback = Deck.shouldEnable, defaults_yes = False)
@@ -415,13 +417,13 @@ def prepKWP(card):
     Deck.newCard(card.note().fields[0])
     gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
 
-    if Deck.kanji == "N/A":
+    if Deck.kanji == "X":
         Deck.clearCanvas()
 
         gui.GUI.deactivate(continueGUI, oldAccuracyGUI)
         gui.GUI.activate(undoGUI, hintGUI, submitGUI)
         gui.GUI.disable(drawGUI, hintGUI, submitGUI)
-        promptGUI.write("N/A")
+        promptGUI.write("X", "red")
         accuracyGUI.write("--%")
 
         pyg.display.quit()
@@ -461,8 +463,6 @@ def kanjiWritingPractice_bg():
         gui.GUI.activeGUI.update(mouse_pos)
         Stroke.strokeGroup.draw(gui.screen)
 
-        # undoGUI.write(str(int(clock.get_fps())), "black")
-
         pyg.display.update([i.rect for i in gui.GUI.allGUI])
         clock.tick(60)
     pyg.display.quit()
@@ -475,6 +475,7 @@ def kanjiWritingPractice():
 
 def terminateKWP(*args):
     Deck.running = False
+    Deck.paused = False
 
 gui_hooks.reviewer_did_show_question.append(enableKWP)
 gui_hooks.reviewer_did_show_answer.append(terminateKWP)
