@@ -126,7 +126,7 @@ class GUI(pyg.sprite.Sprite):
     def interaction(cls, event):
         """
         Goes into the event loop, handles most possible mouse interactions with GUI\n
-        Requires the gui to be updated to work
+        Requires the GUI to be updated to work
         """
         for obj in cls.activeGUI:
             if obj.hovering:
@@ -193,10 +193,11 @@ class GUI(pyg.sprite.Sprite):
     def write(self, text: str, color = "white"):
         """
         fontInfo = {\n
-            "gui" : gui:GUI,\n
+            "gui" : GUI,\n
             "text" : str,\n
             "color" : pyg.ColorValue\n
-        }
+        }\n
+        New text is a GUI object but is not stored in allGUI
         """
         if hasattr(self, "fontInfo"):
             GUI.deactivate(self.fontInfo["gui"])
@@ -228,6 +229,7 @@ class GUI(pyg.sprite.Sprite):
         self.active(self)
 
 def _scale(sprite: Union[pyg.sprite.Sprite, GUI]):
+    "Only for updating when changing states/sizes"
     sprite.image = pyg.transform.scale(sprite.ogimage if isinstance(sprite.ogimage, pyg.surface.Surface) else sprite.ogimage.returnState(), [i*scale for i in sprite.dimensions])
     sprite.rect = sprite.image.get_rect(center = (sprite.pos[0]*scaleX, sprite.pos[1]*scaleY))
 

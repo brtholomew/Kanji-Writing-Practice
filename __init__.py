@@ -1,4 +1,4 @@
-# practice writing kanji
+# Kanji Writing Practice
 import sys
 from os import path
 from threading import Thread
@@ -10,8 +10,30 @@ import pygame as pyg
 import gui
 import svg
 from aqt import gui_hooks, mw
-from aqt.utils import ask_user
+from aqt.utils import ask_user, show_warning
 
+# monkey patching to prevent pygame from crashing anki (wrap function doesn't work)
+from aqt.qt import QWidget
+def cancelKWP(self):
+    #Deck.paused = Deck.running
+    if Deck.running:
+        terminateKWP()
+        show_warning("Kanji Writing Practice has been terminated due to an external window opening. Reload deck to reopen KWP.")
+    self._ogshow(self)
+
+QWidget._ogshow = QWidget.show
+QWidget.show = cancelKWP
+
+# def resumeKWP(self, event):
+#     print("lawlawlalwal")
+#     self._ogcloseEvent(self, event)
+#     if Deck.paused:
+#         kanjiWritingPractice()
+
+# QWidget._ogcloseEvent = QWidget.closeEvent
+# QWidget.closeEvent = resumeKWP
+
+# config
 config = mw.addonManager.getConfig(__name__)
 
 # check and correct invalid config values
@@ -30,6 +52,7 @@ clock = pyg.time.Clock()
 # pygame screen
 gui.initDisplay((300, 300), "Kanji Writing Practice")
 
+# -------------------- Classes --------------------
 class Deck():
     """
     Processes the anki card, also has some gamestate attributes/methods
@@ -41,12 +64,13 @@ class Deck():
     kanji: Union[svg.Kanji, str] = "N/A"
 
     # gamestate attributes
-    # x = gui.screen.get_rect().w
-    # y = gui.screen.get_rect().h
-    x = 300
-    y = 300
-
-    enabled = False
+    x = gui.screen.get_rect().w
+    y = gui.screen.get_rect().h
+    # Pygame window is active
+    running = False
+    # # Exclusively for handling when KWP is paused by an Anki window GUI
+    # paused = False
+    # User is allowed to draw
     active = False
 
     @classmethod
@@ -58,6 +82,7 @@ class Deck():
                 cls.prompt.append(c)
                 if not c in cls.kanjiDict:
                     try:
+                        # range inversion formula for points (so to the user, speed value is intuitive)
                         cls.kanjiDict[c] = svg.Kanji(c, drawGUI.dimensions, Stroke.width, 100 - config["speed"] + 15)
                     except FileNotFoundError:
                         pyg.display.quit()
@@ -115,8 +140,7 @@ class Deck():
     @classmethod
     def shouldEnable(cls, shouldEnable):
         # only should be called by ask_user
-        cls.enabled = shouldEnable
-        if cls.enabled:
+        if shouldEnable:
             prepKWP(mw.reviewer.card)
             config["whitelist"].append(deckID)
         else:
@@ -136,7 +160,7 @@ class Animate():
 
     @classmethod
     def newAnimation(cls, kanji: svg.Kanji):
-        if kanji.pBzPoints == "N/A": # bezier class was not coded to handle a specific command
+        if kanji.pBzPoints == "N/A": # No animation
             gui.GUI.disable(hintGUI)
             hintGUI.changeState(3)
             return
@@ -211,6 +235,7 @@ class Stroke(pyg.sprite.Sprite):
     def draw(self, finalPos: tuple[int, int], colorIndex: int = 0):
         """
         Draws a line on the frame\n
+        Every new line should have a new list appended to self.points before drawing anything
         """
         self.points[-1].append(tuple(i/gui.scale for i in finalPos))
         pyg.draw.circle(self.image, self.colors[colorIndex], finalPos, Stroke.width*gui.scale/2)
@@ -232,7 +257,8 @@ class Stroke(pyg.sprite.Sprite):
 
     def scale(self):
         """
-        Redraws the frame with the correct scaling
+        Redraws the frame with the correct scaling\n
+        Also used for updating a Stroke if the points list is ever updated
         """
         alpha = self.image.get_alpha()
         
@@ -272,10 +298,8 @@ def drawDrag(self:gui.GUI):
 
     drawStroke.draw(finalPos)
 
-def drawPointsCheck(self:gui.GUI):
-    gui.GUI.enable(undoGUI)
-
 def drawCheck(self:gui.GUI):
+    # allows for the user to drag mouse outside of drawGUI
     if not self.hovering and self.dragging:
         drawStroke.initPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
@@ -372,19 +396,16 @@ drawStroke = Stroke(drawGUI)
 Animate.frame = Stroke(drawGUI)
 gui.GUI.trueTransform(Animate.frame, "set_alpha", 127)
 
-# -------------------- Main Loop --------------------
+# -------------------- Anki Hooks --------------------
 pyg.display.quit()
-running = False
 
 def enableKWP(card):
     global deckID
     deckID = mw.col.decks.current()["id"]
+
     if not deckID in config["whitelist"] + config["blacklist"]:
         ask_user("Would you like to enable Kanji Writing Practice for this deck?", callback = Deck.shouldEnable, defaults_yes = False)
-    else:
-        Deck.enabled = deckID in config["whitelist"]
-        
-    if Deck.enabled:
+    elif deckID in config["whitelist"]:
         prepKWP(card)
 
 def prepKWP(card):
@@ -412,24 +433,23 @@ def prepKWP(card):
     kanjiWritingPractice()
 
 def kanjiWritingPractice_bg():
-    global mouse_pos, running
+    global mouse_pos
 
-    if running or not hasattr(mw.reviewer, "state") or mw.state != "review":
+    if Deck.running or not hasattr(mw.reviewer, "state") or mw.state != "review":
         return
 
     pyg.display.init()
     gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
-    running = True
+    Deck.running = True
 
-    while running:
+    while Deck.running:
         mouse_pos = pyg.mouse.get_pos()
 
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
-                running = False
+                Deck.running = False
             elif event.type == pyg.WINDOWRESIZED:
                 gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
-                print(drawStroke.rect)
             elif event.type == animateEvent:
                 Animate.begin()
             elif event.type == endAnimateEvent:
@@ -445,10 +465,6 @@ def kanjiWritingPractice_bg():
 
         pyg.display.update([i.rect for i in gui.GUI.allGUI])
         clock.tick(60)
-
-    # bandaid fix
-    #gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
-    print(drawStroke.rect)
     pyg.display.quit()
 
 # code taken from the Anki development forums: https://forums.ankiweb.net/t/pygame-addon-has-trouble-switching-from-overview-to-review/62502/5
@@ -458,9 +474,7 @@ def kanjiWritingPractice():
     t.start()
 
 def terminateKWP(*args):
-    global running
-    running = False
-    Deck.enabled = False
+    Deck.running = False
 
 gui_hooks.reviewer_did_show_question.append(enableKWP)
 gui_hooks.reviewer_did_show_answer.append(terminateKWP)
