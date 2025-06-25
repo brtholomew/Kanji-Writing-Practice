@@ -411,6 +411,10 @@ def enableKWP(card):
         prepKWP(card)
 
 def prepKWP(card):
+    # pygame can't have two displays inited at the same time
+    if Deck.running:
+        return
+    Deck.running = True
     pyg.display.init()
 
     gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
@@ -437,12 +441,12 @@ def prepKWP(card):
 def kanjiWritingPractice_bg():
     global mouse_pos
 
-    if Deck.running or not hasattr(mw.reviewer, "state") or mw.state != "review":
+    if not hasattr(mw.reviewer, "state") or mw.state != "review":
+        Deck.running = False
         return
 
     pyg.display.init()
     gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
-    Deck.running = True
 
     while Deck.running:
         mouse_pos = pyg.mouse.get_pos()
