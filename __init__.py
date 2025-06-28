@@ -12,10 +12,9 @@ import svg
 from aqt import gui_hooks, mw
 from aqt.utils import ask_user, show_warning
 
-# monkey patching to prevent pygame from crashing anki (wrap function doesn't work)
+# monkey patching to prevent pygame from crashing anki (seems the wrap function doesn't work)
 from aqt.qt import QWidget
 def cancelKWP(self):
-    #Deck.paused = Deck.running
     if Deck.running:
         terminateKWP()
         Deck.paused = True
@@ -77,36 +76,37 @@ class Deck():
     def newCard(cls, question: str):
         cls.reset()
         for c in question:
-            # code taken from Kanji Colorizer: https://github.com/cayennes/kanji-colorize/blob/main/anki/kanji_colorizer.py
+            # if conditional taken from Kanji Colorizer: https://github.com/cayennes/kanji-colorize/blob/main/anki/kanji_colorizer.py
             if ord(c) >= 19968 and ord(c) <= 40879:
-                cls.prompt.append(c)
                 if not c in cls.kanjiDict:
                     try:
-                        # range inversion formula for points (so to the user, speed value is intuitive)
+                        # range inversion formula for points (so to the user, speed value is intuitive) (thanks issai)
                         cls.kanjiDict[c] = svg.Kanji(c, drawGUI.dimensions, Stroke.width, 100 - config["speed"] + 15)
                     except FileNotFoundError:
-                        pyg.display.quit()
-                        raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
+                        cls.prompt.append("X")
+                        continue
+                        # pyg.display.quit()
+                        # raise FileNotFoundError(f"Could not find an svg file for this kanji: {c}")
                     except svg.SvgError:
                         pyg.display.quit()
                         raise svg.SvgError(f"An error occured while working with this kanji: {c}")
+                cls.prompt.append(c)
         if not cls.prompt:
             cls.prompt.append("X")
-            cls.kanji = "X"
-            return
-        cls.initKanji()
 
     @classmethod
-    def shouldEnd(cls):
+    def shouldContinue(cls):
         cls.counter += 1
-        return cls.counter >= len(cls.prompt)
+        if cls.counter < len(cls.prompt):
+            gui.GUI.deactivate(undoGUI, hintGUI, submitGUI)
+            gui.GUI.activate(continueGUI)
 
     @classmethod
     def initKanji(cls):
         try:
             cls.kanji = cls.kanjiDict[cls.prompt[cls.counter]]
         except KeyError:
-            cls.kanji = f"N/A ({cls.prompt[cls.counter]})"
+            cls.kanji = "X"
     
     @classmethod
     def reset(cls):
@@ -126,16 +126,23 @@ class Deck():
 
     @classmethod
     def newRound(cls):
+        cls.initKanji()
         cls.clearCanvas()
-
         gui.GUI.deactivate(continueGUI, oldAccuracyGUI)
         gui.GUI.activate(undoGUI, hintGUI, submitGUI)
-        gui.GUI.enable(drawGUI, hintGUI, submitGUI)
-        Animate.newAnimation(Deck.kanji)
-        promptGUI.write(Deck.kanji.str)
-        accuracyGUI.write("--%")
 
-        cls.active = True
+        if Deck.kanji == "X":
+            gui.GUI.disable(drawGUI, hintGUI, submitGUI)
+            promptGUI.write("X", "red")
+            accuracyGUI.write("--%")
+            Deck.shouldContinue()
+        else:
+            gui.GUI.enable(drawGUI, hintGUI, submitGUI)
+            Animate.newAnimation(Deck.kanji)
+            promptGUI.write(Deck.kanji.str)
+            accuracyGUI.write("--%")
+
+            cls.active = True
 
     @classmethod
     def shouldEnable(cls, shouldEnable):
@@ -177,7 +184,6 @@ class Animate():
             return
 
         if cls.counter == 0:
-            # TODO: readability
             cls.frame.points.append([])
             cls.frame.initPos = tuple(i*gui.scale for i in Deck.kanji.pBzPoints[cls.currentFrame][0])
 
@@ -286,7 +292,6 @@ class Stroke(pyg.sprite.Sprite):
 def drawInit(self:gui.GUI):
     finalPos = (mouse_pos[0] - self.rect.left, mouse_pos[1] - self.rect.top)
 
-    # TODO: readability
     drawStroke.points.append([])
     drawStroke.colors.append("white")
     drawStroke.initPos = finalPos
@@ -368,13 +373,10 @@ def submit(self:gui.GUI):
     config["kanjiScore"][Deck.kanji.str] = score
     mw.addonManager.writeConfig(__name__, config)
 
-    if not Deck.shouldEnd():
-        gui.GUI.deactivate(undoGUI, hintGUI, submitGUI)
-        gui.GUI.activate(continueGUI)
+    Deck.shouldContinue()
 
 # continueGUI events
 def continueClicked(self: gui.GUI):
-    Deck.initKanji()
     Deck.newRound()
 
 # -------------------- GUI Initializing --------------------
@@ -420,19 +422,6 @@ def prepKWP(card):
     gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
     Deck.newCard(card.note().fields[0])
     gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
-
-    if Deck.kanji == "X":
-        Deck.clearCanvas()
-
-        gui.GUI.deactivate(continueGUI, oldAccuracyGUI)
-        gui.GUI.activate(undoGUI, hintGUI, submitGUI)
-        gui.GUI.disable(drawGUI, hintGUI, submitGUI)
-        promptGUI.write("X", "red")
-        accuracyGUI.write("--%")
-
-        pyg.display.quit()
-        kanjiWritingPractice()
-        return
     
     Deck.newRound()
     pyg.display.quit()
