@@ -1,12 +1,13 @@
 # Kanji Writing Practice
 import sys
-from os import path
+from os import path, environ
 from threading import Thread
 from typing import Union
 # bundling pygame
 sys.path.insert(0, path.dirname(__file__))
 
 import pygame as pyg
+from pygame._sdl2 import Window
 import gui
 import svg
 from aqt import gui_hooks, mw
@@ -35,21 +36,32 @@ QWidget.show = cancelKWP
 # config
 config = mw.addonManager.getConfig(__name__)
 
-# check and correct invalid config values
-# 100 = max speed, 15 = min speed
-conSpeed = config["speed"]
-if "speed" in config and type(conSpeed) == int or type(conSpeed) == float:
-    config["speed"] = max(min(int(conSpeed), 100), 15)
-else:
-    config["speed"] = 65
+def fixConfig():
+    # 100 = max speed, 15 = min speed
+    conSpeed = config["speed"]
+    if "speed" in config and type(conSpeed) == int or type(conSpeed) == float:
+        config["speed"] = max(min(int(conSpeed), 100), 15)
+    else:
+        config["speed"] = 65
 
-mw.addonManager.writeConfig(__name__, config)
+    # TODO: access database on separate thread through dedicated anki method
+    deckList = (config["blacklist"], config["whitelist"])
+    for i in deckList:
+        for k in range(len(i)):
+            print(mw.col.decks.get(i[k], False))
+            try:
+                pass
+            except:
+                pass
+
+    mw.addonManager.writeConfig(__name__, config)
+gui_hooks.main_window_did_init.append(fixConfig)
 
 pyg.init()
 clock = pyg.time.Clock()
 
 # pygame screen
-gui.initDisplay((300, 300), "Kanji Writing Practice")
+gui.initDisplay((300, 300), "Initializing", (-300, -300))
 
 # -------------------- Classes --------------------
 class Deck():
@@ -62,14 +74,17 @@ class Deck():
     counter = 0
     kanji: Union[svg.Kanji, str] = "X"
 
-    # gamestate attributes
+    # pygame window attributes
+    # NOTE: do not change the names of the x/y attributes, the deck class becomes a parameter for the resize screen function
     x = gui.screen.get_rect().w
     y = gui.screen.get_rect().h
-    # Pygame window is active
+    pos = None
+    # pos = Window.from_display_module().position
+    # pygame window is active
     running = False
-    # Exclusively for handling when KWP is paused by an Anki window GUI
+    # exclusively for handling when KWP is paused by an Anki window GUI
     paused = False
-    # User is allowed to draw
+    # user is allowed to draw
     active = False
 
     @classmethod
@@ -417,11 +432,12 @@ def prepKWP(card):
     if Deck.running:
         return
     Deck.running = True
+
+    # initing display and setting mode for convert method to function
     pyg.display.init()
 
-    gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
+    gui.initDisplay((300, 300), "Initializing", (-300, -300))
     Deck.newCard(card.note().fields[0])
-    gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
     
     Deck.newRound()
     pyg.display.quit()
@@ -435,7 +451,11 @@ def kanjiWritingPractice_bg():
         return
 
     pyg.display.init()
-    gui.initDisplay((Deck.x, Deck.y), "Kanji Writing Practice")
+    gui.initDisplay((300, 300), "Kanji Writing Practice", Deck.pos)
+    gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
+
+    # NOTE: pygame's sdl2 module seems weird
+    window = Window.from_display_module()
 
     while Deck.running:
         mouse_pos = pyg.mouse.get_pos()
@@ -445,6 +465,7 @@ def kanjiWritingPractice_bg():
                 Deck.running = False
             elif event.type == pyg.WINDOWRESIZED:
                 gui.scaleDisplay(event, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
+                Deck.x, Deck.y = pyg.display.get_window_size()
             elif event.type == animateEvent:
                 Animate.begin()
             elif event.type == endAnimateEvent:
@@ -455,9 +476,9 @@ def kanjiWritingPractice_bg():
         gui.GUI.activeGUI.draw(gui.screen)
         gui.GUI.activeGUI.update(mouse_pos)
         Stroke.strokeGroup.draw(gui.screen)
-
         pyg.display.update([i.rect for i in gui.GUI.allGUI])
         clock.tick(60)
+    Deck.pos = window.position
     pyg.display.quit()
 
 # code taken from the Anki development forums: https://forums.ankiweb.net/t/pygame-addon-has-trouble-switching-from-overview-to-review/62502/5

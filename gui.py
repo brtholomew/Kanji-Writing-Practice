@@ -1,6 +1,6 @@
 # module for handling gui elements (such as buttons)
 import pygame as pyg
-from os import path
+from os import path, environ
 from typing import Callable, Union #, TypeAlias
 
 flags = pyg.RESIZABLE | pyg.DOUBLEBUF
@@ -10,7 +10,7 @@ pyg.init()
 def assetPath(file: str):
     return path.join(path.dirname(__file__), "assets", file)
 
-def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
+def initDisplay(size: tuple = (100, 100), caption:str = "Pygame", pos: tuple = None):
     """
     Initializes a display at the desired lowest possible size\n
     Necessary for allowing the GUI to scale properly
@@ -18,6 +18,11 @@ def initDisplay(size: tuple = (100, 100), caption:str = "Pygame"):
     global ogSize, currentSize, screen, scaleX, scaleY, scale
     ogSize, currentSize = size, size
     scaleX, scaleY, scale = 1, 1, 1
+
+    windowInfo = pyg.display.Info()
+
+    # taken from stackoverflow: https://stackoverflow.com/questions/4135928/pygame-display-position
+    environ['SDL_VIDEO_WINDOW_POS'] = f"{pos[0]},{pos[1]}" if pos else f"{windowInfo.current_w/2},{windowInfo.current_h/2}"
 
     screen = pyg.display.set_mode(size = ogSize, flags = flags)
     pyg.display.set_caption(caption)
@@ -29,6 +34,9 @@ def scaleDisplay(event, *args):
     """
     global currentSize, scaleX, scaleY, scale
     # prevent the screen from getting smaller than the designated amount
+    # TODO: remove later
+    # print(f"event: {event.x}, {event.y}")
+    # print(f"og: {ogSize[0]}, {ogSize[1]}")
     screen = pyg.display.set_mode((max(ogSize[0], event.x), max(ogSize[1], event.y)), flags = flags)
 
     displaySize = pyg.display.get_window_size()
@@ -58,6 +66,7 @@ def scaleDisplay(event, *args):
             sprite.scale()
 
     currentSize = displaySize
+
 
 # point: TypeAlias = tuple[int, int]
 # guiEvent: TypeAlias = Callable[["GUI"], None]
