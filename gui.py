@@ -34,9 +34,6 @@ def scaleDisplay(event, *args):
     """
     global currentSize, scaleX, scaleY, scale
     # prevent the screen from getting smaller than the designated amount
-    # TODO: remove later
-    # print(f"event: {event.x}, {event.y}")
-    # print(f"og: {ogSize[0]}, {ogSize[1]}")
     screen = pyg.display.set_mode((max(ogSize[0], event.x), max(ogSize[1], event.y)), flags = flags)
 
     displaySize = pyg.display.get_window_size()

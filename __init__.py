@@ -44,15 +44,15 @@ def fixConfig():
     else:
         config["speed"] = 65
 
-    # TODO: access database on separate thread through dedicated anki method
-    deckList = (config["blacklist"], config["whitelist"])
-    for i in deckList:
-        for k in range(len(i)):
-            print(mw.col.decks.get(i[k], False))
-            try:
-                pass
-            except:
-                pass
+    # # TODO: convert deckIDs in config to deck name automatically, also prevents config from being cluttered with custom studies
+    # deckList = (config["blacklist"], config["whitelist"])
+    # for i in deckList:
+    #     for k in range(len(i)):
+    #         print(mw.col.decks.get(i[k], False))
+    #         try:
+    #             pass
+    #         except:
+    #             pass
 
     mw.addonManager.writeConfig(__name__, config)
 gui_hooks.main_window_did_init.append(fixConfig)
@@ -79,7 +79,6 @@ class Deck():
     x = gui.screen.get_rect().w
     y = gui.screen.get_rect().h
     pos = None
-    # pos = Window.from_display_module().position
     # pygame window is active
     running = False
     # exclusively for handling when KWP is paused by an Anki window GUI
@@ -113,7 +112,7 @@ class Deck():
     def shouldContinue(cls):
         cls.counter += 1
         if cls.counter < len(cls.prompt):
-            gui.GUI.deactivate(undoGUI, hintGUI, submitGUI)
+            gui.GUI.deactivate(hintGUI, submitGUI)
             gui.GUI.activate(continueGUI)
 
     @classmethod
@@ -136,14 +135,14 @@ class Deck():
             i.colors = []
             i.scale()
         gui.GUI.trueTransform(drawStroke, "set_alpha", 255)
-
+        gui.GUI.disable(undoGUI)
         gui.GUI.deactivate(gradeGUI)
 
     @classmethod
     def newRound(cls):
         cls.initKanji()
         cls.clearCanvas()
-        gui.GUI.deactivate(continueGUI, oldAccuracyGUI)
+        gui.GUI.deactivate(continueGUI, oldAccuracyGUI, retryGUI)
         gui.GUI.activate(undoGUI, hintGUI, submitGUI)
 
         if Deck.kanji == "X":
@@ -158,6 +157,11 @@ class Deck():
             accuracyGUI.write("--%")
 
             cls.active = True
+
+    @classmethod
+    def retryRound(cls, *args):
+        cls.counter -= 1
+        cls.newRound()
 
     @classmethod
     def shouldEnable(cls, shouldEnable):
@@ -342,7 +346,8 @@ redYellowGreenBezier = svg.Bezier(' d="M255,0C255,255,255,255,0,255"')
 def submit(self:gui.GUI):
     Animate.tryEnd()
     Deck.active = False
-    gui.GUI.disable(drawGUI, undoGUI, hintGUI, submitGUI)
+    gui.GUI.deactivate(undoGUI)
+    gui.GUI.disable(drawGUI, hintGUI, submitGUI)
 
     strokeMasks = [pyg.mask.from_surface(i.image) for i in drawStroke.explode()]
     testingKanjiMasks = svg.Kanji.svgTextToSurf(*[svg.alterValue(i, width = drawGUI.dimensions[0]*gui.scale, height = drawGUI.dimensions[1]*gui.scale, **{"stroke-width" : 16*gui.scale}) for i in Deck.kanji.svgList])
@@ -373,13 +378,15 @@ def submit(self:gui.GUI):
     
     gui.GUI.trueTransform(drawStroke, "set_alpha", 127)
 
-    global gradeGUI
-    gradeGUI.delete()
-    gradeGUI = gui.GUI.activate(gui.GUI(drawGUI.pos, drawGUI.dimensions, image = mergedSurface))[0]
-
     score = round(sum(scores)/len(kanjiMasks), 2)
     redGreen = redYellowGreenBezier.functions[0](score)
     accuracyGUI.write(f"{int(score*100)}%", (redGreen[0], redGreen[1], 0))
+
+    gui.GUI.activate(retryGUI)
+
+    global gradeGUI
+    gradeGUI.delete()
+    gradeGUI = gui.GUI.activate(gui.GUI(drawGUI.pos, drawGUI.dimensions, image = mergedSurface))[0]
 
     if Deck.kanji.str in config["kanjiScore"]:
         gui.GUI.activate(oldAccuracyGUI)
@@ -394,13 +401,16 @@ def submit(self:gui.GUI):
 def continueClicked(self: gui.GUI):
     Deck.newRound()
 
+
 # -------------------- GUI Initializing --------------------
 drawGUI = gui.GUI((150, 150), (175, 175), image = "grid.png", pressed = drawInit, heave = drawDrag, active = drawCheck)
 undoGUI = gui.GUI((85, 275), (30, 30), image = gui.Spritesheet((500, 500), "undogui.png"), freed = undoStroke)
 hintGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "hintgui.png"), freed = hintAnimate)
 submitGUI = gui.GUI((215, 275), (30, 30), image = gui.Spritesheet((500, 500), "submitgui.png"), freed = submit)
-promptGUI = gui.GUI((150, 30), (30, 30), image = "grid.png")
 continueGUI = gui.GUI((150, 275), (30, 30), image = gui.Spritesheet((500, 500), "continuegui.png"), freed = continueClicked)
+retryGUI = gui.GUI((85, 275), (30, 30), image = gui.Spritesheet((500, 500), "retrygui.png"), freed = Deck.retryRound)
+
+promptGUI = gui.GUI((150, 30), (30, 30), image = "grid.png")
 accuracyGUI = gui.GUI((215, 30), (60, 30), image = "accuracygui.png")
 oldAccuracyGUI = gui.GUI((85, 30), (60, 30), image = "accuracygui.png")
 gradeGUI = gui.GUI(drawGUI.pos, drawGUI.dimensions)
@@ -454,7 +464,7 @@ def kanjiWritingPractice_bg():
     gui.initDisplay((300, 300), "Kanji Writing Practice", Deck.pos)
     gui.scaleDisplay(Deck, *gui.GUI.allGUI, *Stroke.strokeGroup.sprites(), Deck.kanji)
 
-    # NOTE: pygame's sdl2 module seems weird
+    # NOTE: pygame's sdl2 module seems weird, also taken from stackoverflow: https://stackoverflow.com/questions/4135928/pygame-display-position
     window = Window.from_display_module()
 
     while Deck.running:

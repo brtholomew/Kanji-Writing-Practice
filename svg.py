@@ -35,6 +35,7 @@ def replaceSubstring(stri: str, newValue: Union[str, float], index: tuple):
 def standardizePath(svg: str, startIndex: int, endIndex: int):
     "Fixes any inconsistencies in the path parameter for extractPathParameter"
     temp = []
+    # particularly this code removes any spaces and replaces them with commas if appropriate
     for i in range(startIndex, endIndex):
         if not svg[i] == " ":
             temp.append(svg[i])
@@ -148,14 +149,18 @@ def extractValue(svg: str, keyword: str):
 def alterValue(svg: str, **kwargs):
     """
     Returns an svg string file with specific values changed\n
-    Will also properly apply width and height dilations
+    Will also properly apply width and height dilations to paths
     """
     for keyword, value in kwargs.items():
         startIndex, endIndex = extractPosition("".join(svg), keyword)
         svg, oldValue = replaceSubstring(svg, value, (startIndex, endIndex))
 
-        if keyword == "width" or keyword == "height":
-            d = extractPathParameter(svg)
+        # TODO: only run this code when there's a path in the svg
+        if keyword == "width" or keyword == "height" and "<path" in svg:
+            try:
+                d = extractPathParameter(svg)
+            except SvgError:
+                return svg
 
             temp = ""
             # for every move command
@@ -260,10 +265,9 @@ class Kanji():
     """
     def __init__(self, kanji: str, dimensions: tuple[int, int], strokeWidth: float, points: int = 50):
         self.str = kanji
-        svgList = Kanji.deconstructKanji(kanji)[0]
+        svgList, strokeNumbers = Kanji.deconstructKanji(kanji)
         self.svgList = [alterValue(i, width = dimensions[0], height = dimensions[1], **{"stroke-width" : strokeWidth}, viewBox = f"0 0 {dimensions[0]} {dimensions[1]}") for i in svgList]
 
-        #self.metadata = dict(width = dimensions[0], height = dimensions[1], strokeWidth = strokeWidth)
         self.metadata = {"width": dimensions[0], "height": dimensions[1], "strokeWidth": strokeWidth}
         
         self.pBzPoints = []
@@ -279,6 +283,8 @@ class Kanji():
             print(f"This kanji doesn't have an animation: {self.str}, file: {Kanji.findKanji(self.str)}")
         
         self.surfList = Kanji.svgTextToSurf(*self.svgList)
+        # NOTE: strokenumbers isn't used for anything since pygame cannot render it
+        self.strokeNumbers = Kanji.svgTextToSurf(strokeNumbers)[0]
         self.maskList = [pyg.mask.from_surface(i) for i in self.surfList]
 
     @staticmethod
@@ -292,26 +298,37 @@ class Kanji():
     @staticmethod
     def deconstructKanji(kanji: str):
         """
-        Returns a list where every item is a stroke of a kanji in svg text format, as well as the metadata
+        Returns a list where every item is a stroke of a kanji in svg text format, and stroke numbers as a separate svg
         """
         with open(Kanji.findKanji(kanji), "r", encoding = "utf-8") as svg:
             file = svg.read().split("\n")
             paths = []
+            numbers = []
             for line in file:
                 # find the svg tag
                 if "<svg" in line:
                     svgTag = line
                 # and every "path" which is basically a drawn line
                 elif "<path" in line:
+                    # remove indents
                     paths.append(line.replace("\t", ""))
+                elif "kvg:StrokeNumbers" in line:
+                    numberID = line
+                elif "<text" in line:
+                    numbers.append(line.replace("\t", ""))
             # brush info is always 1 line below svg tag (at least for kanjivg files)
             brushInfo = file[file.index(svgTag)+1]
-        svgList = []
-        for path in paths:
-            svgList.append(f"{svgTag}\n{brushInfo}\n\t{path}\n</g>\n</svg>")
 
-        metadata = dict(width = extractValue(svgTag, "width"), height = extractValue(svgTag, "height"), strokeWidth = extractValue(brushInfo, "stroke-width"))
-        return svgList, metadata
+        svgList = [f"{svgTag}\n{brushInfo}\n\t{path}\n</g>\n</svg>" for path in paths]
+        # this might be the stupidest thing i am forced to do
+        tab = "\n\t"
+
+        # NOTE: stroke numbers are successfully extractable however they aren't renderable with pygame
+        strokeNumbers = f"{svgTag}\n{numberID}\n\t{tab.join(numbers)}\n</g>\n</svg>"
+
+        # do i even need the metadata?
+        # metadata = dict(width = extractValue(svgTag, "width"), height = extractValue(svgTag, "height"), strokeWidth = extractValue(brushInfo, "stroke-width"))
+        return svgList, strokeNumbers
 
     @staticmethod
     def svgTextToSurf(*args):
@@ -369,15 +386,39 @@ if __name__ == "__main__":
 # 	<path id="kvg:06163-s4" kvg:type="㇛" d="m51.6,15.24c0.83,0.83,1.14,2.12,1.02,3.3-0.74,7.34-1.75,14.09-3.1,18.7-0.5,1.69,0.19,2.75,1.57,2.46,8.11,-1.7,15.02,-2.59,24.42,-3.15,2.09,-0.13,4.3,-0.23,6.68,-0.33"/>
 # </g>
 # </svg>"""))
-    #print(hex(ord("𠂊")))
+    #print(hex(ord("返")))
     testKanji = Kanji("返", (300, 300), 8)
-    #print(testKanji.pBzPoints)
     blitSequence = [(surf, (0, 0)) for surf in testKanji.surfList]
+    blitSequence.append((testKanji.strokeNumbers, (0,0)))
+    surface = Kanji.svgTextToSurf("""<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
+<g id="kvg:StrokePaths_08fd4" style="fill:none;stroke:#000000;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;">
+        <path id="kvg:08fd4-s1" kvg:type="㇐" d="M47.29,21.2c2.34,0.68,5.1,0.4,7.36,0.13c7.2-0.88,15.44-3.19,22.73-3.69c2.12-0.15,4.28-0.19,6.36,0.32"/>
+        <path id="kvg:08fd4-s2" kvg:type="㇒" d="M49.86,21.63c0.94,0.94,1.26,2.36,1.18,4.1c-0.92,19.77-3.92,34.02-13.2,47"/>
+        <path id="kvg:08fd4-s3" kvg:type="㇇" d="M54.16,38.25c1.24,0.29,2.39,0.48,4.87,0.04c2.48-0.44,15.15-3.97,16.85-4.4c1.7-0.44,3.66,1.09,3.07,2.7C72.5,54.38,62.88,69.62,44.91,77.51"/>
+        <path id="kvg:08fd4-s4" kvg:type="㇏" d="M54.14,47.38c3.21,0.65,17.21,16.04,28.92,24.68c2.48,1.83,5.25,3.99,8.32,4.7"/>
+        <path id="kvg:08fd4-s5" kvg:type="㇔" d="M18.71,22.5c3.63,1.39,9.38,5.72,10.29,7.88"/>
+        <path id="kvg:08fd4-s6" kvg:type="㇋" d="M14.75,51.5c2.25,1,3.75,0.5,4.75,0.25s7.75-3.25,9.25-3.75c3.7-1.23,4.4,0.75,1.61,3.96c-9.49,10.91-7.99,8.54-1.11,14.54c1.93,1.69,0.77,4.27-0.75,5.5c-3.88,3.12-10.25,8.62-12.75,10.5"/>
+        <path id="kvg:08fd4-s7" kvg:type="㇏a" d="M12.25,84.25c4.38-1,10.5-1.5,15-0.5s29.99,6.04,34.5,7c11.12,2.38,20.38,3.25,28.16,3.8"/>
+</g>
+</svg>""")[0]
+    
+#     surface = Kanji.svgTextToSurf("""<svg xmlns="http://www.w3.org/2000/svg" width="109" height="109" viewBox="0 0 109 109">
+# <g id="kvg:StrokeNumbers_08fd4" style="font-size:8;fill:#808080">
+#         <text transform="matrix(1 0 0 1 49.50 18.50)">1</text>
+#         <text transform="matrix(1 0 0 1 42.50 30.13)">2</text>
+#         <text transform="matrix(1 0 0 1 56.25 35.50)">3</text>
+#         <text transform="matrix(1 0 0 1 60.75 48.13)">4</text>
+#         <text transform="matrix(1 0 0 1 10.50 22.63)">5</text>
+#         <text transform="matrix(1 0 0 1 7.50 51.16)">6</text>
+#         <text transform="matrix(1 0 0 1 5.25 87.50)">7</text>
+# </g>
+# </svg>""")[0]
+
     # TODO: cannot change color of svg with altervalue
 
     # pygame
 
-    running = False
+    running = True
 
     while running:
 
@@ -387,7 +428,8 @@ if __name__ == "__main__":
             if event.type == pyg.WINDOWRESIZED:
                 gui.scaleDisplay(event, *gui.GUI.allGUI)
         gui.screen.fill("white")
-        pyg.Surface.blits(gui.screen, blitSequence)
+        #pyg.Surface.blits(gui.screen, blitSequence)
+        pyg.Surface.blit(gui.screen, surface, (0,0))
         gui.GUI.activeGUI.draw(gui.screen)
 
         pyg.display.flip()
