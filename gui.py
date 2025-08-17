@@ -10,6 +10,11 @@ pyg.init()
 def assetPath(file: str):
     return path.join(path.dirname(__file__), "assets", file)
 
+# def addOutline(surf:pyg.Surface, color, width: int): NOTE: doesn't work
+#     outline = pyg.mask.from_surface(surf).outline()
+#     pyg.draw.lines(surf, "black", True, outline, width)
+#     return surf
+
 def initDisplay(size: tuple = (100, 100), caption:str = "Pygame", pos: tuple = None):
     """
     Initializes a display at the desired lowest possible size\n
@@ -242,8 +247,8 @@ def _scale(sprite: Union[pyg.sprite.Sprite, GUI]):
 if __name__ == "__main__":
     # test rendering
     initDisplay((300, 300))
-    promptGUI = GUI((150, 30), (30, 30), image = "grid.png")
-    promptGUI.write("test")
+    promptGUI = GUI((150, 150), (300, 300), image = pyg.font.SysFont("uddigikyokashonr", 100).render("2", False, "white"))
+    GUI.activate(promptGUI)
     
     running = True
 

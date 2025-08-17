@@ -353,6 +353,7 @@ def submit(self:gui.GUI):
     testingKanjiMasks = svg.Kanji.svgTextToSurf(*[svg.alterValue(i, width = drawGUI.dimensions[0]*gui.scale, height = drawGUI.dimensions[1]*gui.scale, **{"stroke-width" : 16*gui.scale}) for i in Deck.kanji.svgList])
     kanjiMasks = [pyg.mask.from_surface(i) for i in testingKanjiMasks]
     mergedSurface = pyg.surface.Surface((drawGUI.dimensions[0]*gui.scale, drawGUI.dimensions[1]*gui.scale), pyg.SRCALPHA)
+    strokeNumber = pyg.font.SysFont("uddigikyokashonr", int(Stroke.width*gui.scale), bold=True)
 
     scores = []
     for i in range(len(strokeMasks)):
@@ -363,18 +364,25 @@ def submit(self:gui.GUI):
             redGreen = redYellowGreenBezier.functions[0](grade)
             pyg.pixelarray.PixelArray(kjm).replace((0, 0, 0), (redGreen[0], redGreen[1], 0) if grade > 0 else (0, 0, 255))
             kjm.set_alpha(127)
-            mergedSurface.blit(kjm, (0, 0))
+            if not Deck.kanji.pBzPoints == "N/A":
+                mergedSurface.blits(blit_sequence=((kjm, (0, 0)), (strokeNumber.render(str(i+1), False, "white"), [j*gui.scale for j in Deck.kanji.pBzPoints[i][int(len(Deck.kanji.pBzPoints[i])/8)]]))) # goodbye readability
+            else:
+                mergedSurface.blit(kjm, (0, 0))
 
         except IndexError:
             scores.append(0)
     
+    # TODO: once the next version is dropped fix the redundant code
     if len(strokeMasks) < len(kanjiMasks):
-        for i in range(1, len(kanjiMasks)-len(strokeMasks)+1):
-            kjm = testingKanjiMasks[-i]
+        for i in range(len(strokeMasks), len(kanjiMasks)):
+            kjm = testingKanjiMasks[i]
             scores.append(0)
             pyg.pixelarray.PixelArray(kjm).replace((0, 0, 0), (0, 0, 255))
             kjm.set_alpha(127)
-            mergedSurface.blit(kjm, (0, 0))
+            if not Deck.kanji.pBzPoints == "N/A":
+                mergedSurface.blits(blit_sequence=((kjm, (0, 0)), (strokeNumber.render(str(i+1), False, "white"), [j*gui.scale for j in Deck.kanji.pBzPoints[i][int(len(Deck.kanji.pBzPoints[i])/8)]]))) # goodbye readability
+            else:
+                mergedSurface.blit(kjm, (0, 0))
     
     gui.GUI.trueTransform(drawStroke, "set_alpha", 127)
 
